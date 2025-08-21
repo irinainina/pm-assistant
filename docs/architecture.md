@@ -29,16 +29,18 @@ Frontend (Next.js 15)
 
 Backend (Python + Flask)
 /backend
-  main.py               # Flask приложение
-  /routes
-    ask.py              # обработчик запросов пользователя
-  /services
-    notion_client.py    # коннектор к Notion API
-    embeddings.py       # генерация эмбеддингов
-    chroma_client.py    # работа с ChromaDB
-    ai_engine.py        # запросы к OpenAI, формирование ответа
-  /utils
-    config.py           # ключи и настройки
+├── main.py                 # Flask приложение
+├── requirements.txt        # библиотеки
+├── .env                    # env переменные бекенда
+├── /routes
+│   └── ask.py              # обработчик запросов пользователя
+├── /services
+│   ├── notion_client.py    # коннектор к Notion API
+│   ├── embeddings.py       # генерация эмбеддингов
+│   ├── chroma_client.py    # работа с ChromaDB
+│   └── ai_engine.py        # запросы к OpenAI, формирование ответа
+└── /utils
+    └── config.py           # ключи и настройки
 
 База знаний
 /data
