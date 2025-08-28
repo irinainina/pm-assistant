@@ -71,9 +71,9 @@ class AIEngine:
     
     def _create_system_prompt(self, language):
         prompts = {
-            'english': """You are a helpful Project Management Assistant. Use the provided context to answer questions accurately. Always cite specific sources using markdown links like [Source Name](url). If the context contains relevant information, provide a comprehensive answer. If the context doesn't contain the exact information, say so but try to provide helpful guidance.""",
-            'russian': """Вы помощник по управлению проектами. Используйте предоставленный контекст для точных ответов. Всегда указывайте конкретные источники с помощью ссылок в формате [Название источника](url). Если в контексте есть relevantная информация, дайте comprehensive ответ. Если в контексте нет точной информации, скажите об этом, но попытайтесь дать полезные рекомендации.""",
-            'ukrainian': """Ви помічник з управління проектами. Використовуйте наданий контекст для точних відповідей. Завжди вказуйте конкретні джерела за допомогою посилань у форматі [Назва джерела](url). Якщо в контексті є relevantна інформація, надайте comprehensive відповідь. Якщо в контексті немає точної інформації, скажіть про це, але спробуйте надати корисні рекомендації."""
+            'english': """You are a helpful Project Management Assistant. Use the provided context to answer questions accurately. If the context doesn't contain the exact information, say so but try to provide helpful guidance.""",
+            'russian': """Вы помощник по управлению проектами. Используйте предоставленный контекст для точных ответов. Если в контексте есть релевантная информация, дайте полный исчерпывающий ответ. Если в контексте нет точной информации, скажите об этом, но попытайтесь дать полезные рекомендации.""",
+            'ukrainian': """Ви помічник з управління проектами. Використовуйте наданий контекст для точних відповідей. Якщо в контексті є релевантна інформація, надайте повну вичерпну відповідь. Якщо в контексті немає точної інформації, скажіть про це, але намагайтеся надати корисні рекомендації."""
         }
         return prompts.get(language, prompts['english'])
     
@@ -84,19 +84,19 @@ class AIEngine:
 
 Question: {query}
 
-Please provide a helpful answer based on the context above. Cite specific sources when possible.""",
+Please provide a helpful answer based on the context above.""",
             'russian': f"""Контекстная информация:
 {context}
 
 Вопрос: {query}
 
-Пожалуйста, дайте полезный ответ на основе контекста выше. Указывайте конкретные источники, когда это возможно.""",
+Пожалуйста, дайте полезный ответ на основе контекста выше.""",
             'ukrainian': f"""Контекстна інформація:
 {context}
 
 Питання: {query}
 
-Будь ласка, надайте корисну відповідь на основі контексту вище. Вказуйте конкретні джерела, коли це можливо."""
+Будь ласка, надайте корисну відповідь на основі контексту вище."""
         }
         return prompts.get(language, prompts['english'])
     

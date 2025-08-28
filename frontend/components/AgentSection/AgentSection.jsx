@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import styles from "./AgentSection.module.css";
 
-const apiUrl = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export default function AgentSection() {
   const [input, setInput] = useState("");
@@ -12,14 +12,11 @@ export default function AgentSection() {
   const [isLoading, setIsLoading] = useState(false);
 
   const chatRef = useRef(null);
-
   const storageKey = "agent_history";
 
   useEffect(() => {
     const savedHistory = localStorage.getItem(storageKey);
-    if (savedHistory) {
-      setMessages(JSON.parse(savedHistory));
-    }
+    if (savedHistory) setMessages(JSON.parse(savedHistory));
   }, []);
 
   const saveHistory = (newMessages) => {
@@ -45,7 +42,12 @@ export default function AgentSection() {
 
       const data = await res.json();
 
-      const agentMessage = { role: "agent", text: data.answer || "No answer", sources: data.sources || [] };
+      const agentMessage = {
+        role: "agent",
+        text: data.answer || "No answer",
+        sources: data.sources || [],
+      };
+
       saveHistory([...messages, userMessage, agentMessage]);
     } catch (err) {
       const errorMessage = { role: "error", text: "Server error" };
@@ -66,9 +68,7 @@ export default function AgentSection() {
   };
 
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
   return (
@@ -98,6 +98,30 @@ export default function AgentSection() {
               ) : (
                 <>
                   <div className={styles.agentContent} dangerouslySetInnerHTML={{ __html: msg.text }} />
+                  {msg.sources && msg.sources.length > 0 && (
+                    <>
+                      <h3 className={styles.sourcesTitle}>Sources:</h3>
+                      <ul className={styles.sources}>
+                        {msg.sources.map((src, i) => (
+                          <li
+                            key={i}
+                            className={
+                              src.score >= 0.7
+                                ? styles.highScore
+                                : src.score >= 0.3
+                                ? styles.mediumScore
+                                : styles.lowScore
+                            }
+                          >
+                            <a href={src.url} target="_blank" rel="noopener noreferrer">
+                              {src.title}
+                            </a>{" "}
+                            - {src.score}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </>
               )}
             </div>

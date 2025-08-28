@@ -212,3 +212,23 @@
   margin: 16px auto;
   border-radius: 16px;
 }
+
+.sources {
+  margin-left: 16px;
+}
+
+.sourcesTitle {
+  margin: 8px 0;
+}
+
+.highScore {
+  color: green;
+}
+
+.mediumScore {
+  color: orange;
+}
+
+.lowScore {
+  color: red;
+}
