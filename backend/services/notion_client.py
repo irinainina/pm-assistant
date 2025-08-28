@@ -13,32 +13,19 @@ class NotionClient:
         for page in pages:
             properties = page.get('properties', {})
             
-            post_id = None
-            if 'post' in properties and properties['post'].get('type') == 'rich_text':
-                rich_text = properties['post'].get('rich_text', [])
-                if rich_text:
-                    post_id = rich_text[0].get('plain_text', '').strip()
-            
-            content = ""
-            original_url = page.get('url')
-
-            if post_id:
-                content = self.get_page_content(post_id)
-                content_url = original_url.replace(page['id'].replace('-', ''), post_id)
-            else:                
-                content = self.get_page_content(page['id'])
-                content_url = original_url
+            post_id = self._extract_property(properties, 'post')            
+            content_source_id = post_id
+            content = self.get_page_content(content_source_id)
+            page_url = f"https://www.notion.so/{post_id}"
                         
             metadata = {
                 'id': page.get('id'),
-                'url': content_url,
+                'url': page_url,
                 'content': content,
                 'properties': {
-                    'title': self._extract_property(properties, 'title'),
-                    'author': self._extract_property(properties, 'author'),
-                    'date': self._extract_property(properties, 'date'),
-                    'post': post_id
-                }
+                  'title': self._extract_property(properties, 'title'),
+                  'post': post_id
+              }
             }
             
             documents_metadata.append(metadata)
@@ -55,11 +42,7 @@ class NotionClient:
         if prop_type == 'title':
             return ''.join([text.get('plain_text', '') for text in prop_value.get('title', [])])
         elif prop_type == 'rich_text':
-            return ''.join([text.get('plain_text', '') for text in prop_value.get('rich_text', [])])
-        elif prop_type == 'select':
-            return prop_value.get('select', {}).get('name')
-        elif prop_type == 'date':
-            return prop_value.get('date', {}).get('start')
+            return ''.join([text.get('plain_text', '') for text in prop_value.get('rich_text', [])])        
         else:
             return None
     
