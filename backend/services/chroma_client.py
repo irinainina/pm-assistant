@@ -119,3 +119,13 @@ class ChromaClient:
         
         return sorted_sources
     
+    def clear_collection(self):
+      try:         
+          self.client.reset()
+          print("ChromaDB collection cleared successfully")
+          return True
+          
+      except Exception as e:
+          print(f"Error clearing collection: {e}")
+          return False
+    

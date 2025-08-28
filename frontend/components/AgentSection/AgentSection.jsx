@@ -10,6 +10,8 @@ export default function AgentSection() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDbActual, setIsDbActual] = useState(true);
 
   const chatRef = useRef(null);
   const storageKey = "agent_history";
@@ -22,6 +24,42 @@ export default function AgentSection() {
   const saveHistory = (newMessages) => {
     setMessages(newMessages);
     localStorage.setItem(storageKey, JSON.stringify(newMessages));
+  };
+
+  const checkDbStatus = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/notion/status`);
+      const data = await res.json();
+
+      if (res.ok) {
+        setIsDbActual(data.is_actual);
+      }
+    } catch (err) {
+      console.error("Failed to check DB status:", err);
+    }
+  };
+
+  const updateDatabase = async () => {
+    setIsUpdating(true);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/notion/update_vector_db`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        await checkDbStatus();
+      } else {
+        console.error("Update error:", data.error || "Unknown error");
+      }
+    } catch (err) {
+      console.error("Update failed:", err);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const sendMessage = async () => {
@@ -71,9 +109,29 @@ export default function AgentSection() {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    checkDbStatus();
+  }, []);
+
   return (
     <section className={styles.section}>
       <div className={styles.imageWrapper}>
+        <button
+          onClick={updateDatabase}
+          className={`${styles.button} ${styles.updateButton} ${
+            isUpdating ? styles.loading : !isDbActual ? styles.outdated : ""
+          }`}
+          disabled={isUpdating}
+        >
+          {isUpdating ? "Updating" : "Update DB"}
+          {isUpdating && (
+            <span className={styles.dots}>
+              <span className={styles.dot}></span>
+              <span className={styles.dot}></span>
+              <span className={styles.dot}></span>
+            </span>
+          )}
+        </button>
         <Image src="/agent.jpg" className={styles.image} width={1900} height={700} alt="agent" priority />
       </div>
 

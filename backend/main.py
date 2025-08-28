@@ -4,6 +4,8 @@ from services.notion_client import NotionClient
 from services.chroma_client import ChromaClient
 from services.ai_engine import AIEngine
 from routes.ask import ask_blueprint
+from utils.db_state import get_last_update_time, set_last_update_time
+import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -15,15 +17,6 @@ ai_engine = AIEngine()
 db_initialized = False
 
 app.register_blueprint(ask_blueprint, url_prefix='/api')
-
-@app.before_request
-def initialize_vector_db():
-    global db_initialized
-    if not db_initialized:
-        documents = notion_client.get_all_documents_metadata()
-        added_count = chroma_client.add_documents(documents)
-        print(f"Initialized vector DB with {added_count} chunks")
-        db_initialized = True
 
 @app.route('/api/search', methods=['GET'])
 def get_answer():
@@ -108,6 +101,57 @@ def get_parsed_documents():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'message': 'PM Assistant API is running'})
+
+@app.route('/api/notion/update_vector_db', methods=['POST'])
+def update_vector_db():
+    try:
+        documents = notion_client.get_all_documents_metadata()
+        
+        chroma_client.clear_collection()
+        added_count = chroma_client.add_documents(documents)
+
+        set_last_update_time()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Vector database updated successfully with {added_count} chunks',
+            'documents_processed': len(documents)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notion/status', methods=['GET'])
+def get_notion_status():
+    try:
+        notion_last_edited_str = notion_client.get_last_edited_time() 
+        our_last_update_ts = get_last_update_time()
+      
+        if not our_last_update_ts:
+            return jsonify({
+                'is_actual': False,
+                'notion_last_edited': notion_last_edited_str,
+                'our_last_update': None
+            })
+       
+        if notion_last_edited_str:
+            dt = datetime.datetime.fromisoformat(notion_last_edited_str.replace('Z', '+00:00'))
+            notion_last_edited_ts = dt.timestamp()
+        else:
+            notion_last_edited_ts = 0
+
+        is_actual = notion_last_edited_ts <= our_last_update_ts
+
+        our_last_update_iso = datetime.datetime.utcfromtimestamp(our_last_update_ts).isoformat() + 'Z'
+        
+        return jsonify({
+            'is_actual': is_actual,
+            'notion_last_edited': notion_last_edited_str,
+            'our_last_update': our_last_update_iso
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
