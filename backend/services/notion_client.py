@@ -83,3 +83,26 @@ class NotionClient:
         content = "\n".join(content_lines)
         content = " ".join(content.split())
         return content
+
+    def get_last_edited_time(self):
+      try:
+          response = self.client.databases.query(
+              database_id=self.database_id,
+              page_size=1,
+              sorts=[{
+                  "timestamp": "last_edited_time",
+                  "direction": "descending"
+              }]
+          )
+          
+          if response.get('results'):
+              page = response['results'][0]
+              last_edited = page.get('last_edited_time')
+              return last_edited
+              
+          return None
+              
+      except Exception as e:
+          print(f"Error getting last edited time: {e}")
+          return None
+      
