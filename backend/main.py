@@ -49,7 +49,7 @@ def search_documents():
     if not query:
         return jsonify({'error': 'Query parameter "q" is required'})
  
-    search_results = chroma_client.search(query, n_results=15)
+    search_results = chroma_client.search(query, n_results=10)
    
     if not search_results or not search_results['documents']:
         return jsonify({

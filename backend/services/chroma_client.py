@@ -66,7 +66,7 @@ class ChromaClient:
         
         return len(ids)
     
-    def _chunk_document(self, text, chunk_size=500, overlap=50):
+    def _chunk_document(self, text, chunk_size=400, overlap=40):
         words = text.split()
         chunks = []
         
