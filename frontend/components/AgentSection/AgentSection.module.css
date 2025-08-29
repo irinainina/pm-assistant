@@ -214,6 +214,11 @@
   border-radius: 16px;
 }
 
+.agentContent ul,
+.agentContent ol {
+  margin-left: 16px;
+}
+
 .sources {
   margin-left: 16px;
 }

@@ -8,3 +8,4 @@ sentence-transformers==5.1.0
 lingua-language-detector==2.1.1
 torch==2.8.0
 numpy==2.3.2
+emoji==2.14.1
