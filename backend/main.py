@@ -6,6 +6,7 @@ from services.ai_engine import AIEngine
 from routes.ask import ask_blueprint
 from utils.db_state import get_last_update_time, set_last_update_time
 import datetime
+import asyncio
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +18,14 @@ ai_engine = AIEngine()
 db_initialized = False
 
 app.register_blueprint(ask_blueprint, url_prefix='/api')
+
+def run_async(async_func):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(async_func)
+    finally:
+        loop.close()
 
 @app.route('/api/search', methods=['GET'])
 def get_answer():
@@ -33,8 +42,9 @@ def get_answer():
             'sources': [],
             'message': 'No results found'
         })
+   
+    answer = run_async(ai_engine.generate_answer(query, search_results))
     
-    answer = ai_engine.generate_answer(query, search_results)
     sources = chroma_client.get_unique_sources(search_results, max_sources=5)
     
     return jsonify({

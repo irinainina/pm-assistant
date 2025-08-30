@@ -1,22 +1,22 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 from utils.config import Config
 from lingua import Language, LanguageDetectorBuilder
 
 class AIEngine:
     def __init__(self):
-        self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        self.client = AsyncOpenAI(api_key=Config.OPENAI_API_KEY)
         self.language_detector = LanguageDetectorBuilder.from_languages(
             Language.ENGLISH, Language.RUSSIAN, Language.UKRAINIAN
         ).build()
-    
-    def generate_answer(self, query, search_results):
+      
+    async def generate_answer(self, query, search_results):
         context_text = self._extract_context_from_search(search_results)
         language = self._detect_language(query)
         system_prompt = self._create_system_prompt(language)
         user_prompt = self._create_user_prompt(query, context_text, language)
         
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_prompt},
