@@ -16,16 +16,11 @@
 ```
 Frontend (Next.js 15)
 /frontend
-  /components
-    Chat.jsx           # компонент чата
-    Message.jsx        # сообщение
-    SourceList.jsx     # список источников
-  /app
-    page.js            # главная страница    
-  /utils
-    apiClient.ts       # функции для работы с backend API
-  /styles
-    globals.css
+├── app
+    └── page.js             # главная страница 
+├── components
+    └── AgentSection.jsx    # компонент чата
+
 
 Backend (Python + Flask)
 /backend
@@ -40,19 +35,14 @@ Backend (Python + Flask)
 │   ├── chroma_client.py    # работа с ChromaDB
 │   └── ai_engine.py        # запросы к OpenAI, формирование ответа
 └── /utils
+    ├── db_state.py         # требуется ли обновление Notion DB
     └── config.py           # ключи и настройки
-
-База знаний
-/data
-  raw/                  # выгруженные страницы из Notion
-  embeddings/           # сохранённые эмбеддинги
-  chroma/               # данные ChromaDB
 
 Документация
 /docs
-  requirements.md       # требования
-  architecture.md       # архитектура
-  api.md                # описание API
-  plan.md               # план работы над проектом
+  ├── requirements.md       # требования
+  ├── architecture.md       # архитектура
+  ├── api.md                # описание эндпойнтов
+  └── plan.md               # план работы над проектом
 
 ```
