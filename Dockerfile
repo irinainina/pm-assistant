@@ -22,5 +22,5 @@ COPY ./backend /usr/src/app
 EXPOSE 8000
 
 # Запуск через gunicorn. Если в main.py переменная приложения называется app
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
+CMD ["gunicorn", "--chdir", "backend", "--bind", "0.0.0.0:8000", "main:app"]
 
