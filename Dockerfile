@@ -22,5 +22,5 @@ COPY ./backend /usr/src/app
 EXPOSE 8000
 
 # Запуск через gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "120", "--preload", "main:app"]
 
