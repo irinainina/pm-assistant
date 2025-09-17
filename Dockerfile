@@ -1,4 +1,4 @@
-# backend/Dockerfile
+# Dockerfile
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -21,6 +21,6 @@ COPY ./backend /usr/src/app
 
 EXPOSE 8000
 
-# Запуск через gunicorn. Если в main.py переменная приложения называется app
-CMD ["gunicorn", "--chdir", "backend", "--bind", "0.0.0.0:8000", "main:app"]
+# Запуск через gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
 
