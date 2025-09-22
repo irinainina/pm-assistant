@@ -23,4 +23,3 @@ EXPOSE 8000
 
 # Запуск через gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "600", "--preload", "main:app"]
-
