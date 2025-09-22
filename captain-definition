@@ -1,4 +1,14 @@
 {
   "schemaVersion": 2,
-  "dockerfilePath": "./Dockerfile"
+  "dockerfilePath": "./Dockerfile",
+  "nginxConfig": {
+    "server": {
+      "location": {
+        "proxyConnectTimeout": "600s",
+        "proxySendTimeout": "600s",
+        "proxyReadTimeout": "600s",
+        "clientMaxBodySize": "100M"
+      }
+    }
+  }
 }
