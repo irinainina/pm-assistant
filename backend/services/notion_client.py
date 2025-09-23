@@ -1,282 +1,167 @@
-from notion_client import Client
+from notion_client import AsyncClient
 from utils.config import Config
 from typing import List, Dict, Any
+import asyncio
+import datetime
 
 class NotionClient:
     def __init__(self):
-        self.client = Client(auth=Config.NOTION_API_KEY)
-        self.root_page_id = Config.NOTION_ROOT_PAGE_ID
-    
-    def get_all_documents_metadata(self):
-        documents_metadata = []
-        
-        all_page_ids = self._get_top_level_page_ids(self.root_page_id)
-        
-        for page_id in all_page_ids:
-            try:
-                metadata = self.get_page_metadata(page_id)
-                if metadata:
-                    documents_metadata.append(metadata)
-            except Exception:
-                continue
-        
-        return documents_metadata
-    
-    def _get_top_level_page_ids(self, page_id: str) -> List[str]:        
-        page_ids = []
-        next_cursor = None
+        self.async_client = AsyncClient(auth=Config.NOTION_API_KEY)
 
-        while True:
-            try:
-                params = {"block_id": page_id, "page_size": 100}
-                if next_cursor:
-                    params["start_cursor"] = next_cursor
-                
-                response = self.client.blocks.children.list(**params)
-                blocks = response.get('results', [])
-                
-                for block in blocks:
-                    if block.get('type') == 'child_page':
-                        page_ids.append(block.get('id'))
+    async def __aenter__(self):
+        return self
 
-                next_cursor = response.get('next_cursor')
-                if not next_cursor or not response.get('has_more'):
-                    break
-                    
-            except Exception:
-                break
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def get_all_documents_metadata(self) -> List[Dict[str, Any]]:
+        pages = await self._get_all_pages_via_search_async()
+        tasks = [self._process_single_page_async(page) for page in pages]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return [result for result in results if result and not isinstance(result, Exception)]
+
+    async def get_last_edited_time(self) -> str:
+        """Get only the latest edited time (optimized)"""
+        params = {
+            "filter": {"property": "object", "value": "page"},
+            "sorts": [{"timestamp": "last_edited_time", "direction": "descending"}],
+            "page_size": 1
+        }
         
-        return page_ids
-    
-    def get_page_metadata(self, page_id: str) -> Dict[str, Any]:
-        try:
-            page_data = self.client.pages.retrieve(page_id=page_id)
-            properties = page_data.get('properties', {})          
-            title = "Untitled"
-            for prop_value in properties.values():
-                if prop_value.get('type') == 'title':
-                    title = ''.join([text.get('plain_text', '') for text in prop_value.get('title', [])])
-                    break
-            
-            content = self.get_page_content(page_id)
-            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
-            
-            return {
-                'id': page_id,
-                'url': page_url,
-                'content': content,
-                'properties': {
-                    'title': title,
-                    'post': page_id
-                },
-                'last_edited_time': page_data.get('last_edited_time')
+        response = await self.async_client.search(**params)
+        results = response.get("results", [])
+        
+        if results:
+            return results[0].get('last_edited_time')
+        return None
+
+    async def get_modified_pages_since(self, since_timestamp: float) -> List[Dict]:
+        """Get pages modified since timestamp using client-side filtering"""
+        all_pages = await self._get_all_pages_via_search_async()
+        
+        if not since_timestamp:
+            return all_pages
+        
+        modified_pages = []
+        for page in all_pages:
+            last_edited = page.get('last_edited_time')
+            if last_edited and self._extract_title(page):
+                page_timestamp = self._parse_timestamp(last_edited)
+                if page_timestamp > since_timestamp:
+                    modified_pages.append(page)
+        
+        return modified_pages
+
+    async def _get_all_pages_via_search_async(self) -> List[Dict[str, Any]]:
+        pages = []
+        has_more, cursor = True, None
+
+        while has_more:
+            params = {
+                "filter": {"property": "object", "value": "page"},
+                "page_size": 100
             }
+            if cursor:
+                params["start_cursor"] = cursor
+
+            response = await self.async_client.search(**params)
+            results = response.get("results", [])
+
+            for page in results:
+                if self._extract_title(page):
+                    pages.append(page)
+
+            has_more = response.get("has_more", False)
+            cursor = response.get("next_cursor")
+
+        return pages
+
+    async def _process_single_page_async(self, page: Dict) -> Dict[str, Any]:
+        try:
+            page_id = page["id"]
+            title = self._extract_title(page)
+            if not title:
+                return None
+
+            content = await self.get_page_content_async(page_id)
+            if not content:
+                return None
             
+            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+
+            return {
+                "id": page_id,
+                "url": page_url,
+                "content": content,
+                "properties": {
+                    "title": title,
+                    "post": page_id.replace('-', '')
+                },
+                "last_edited_time": page.get("last_edited_time")
+            }
         except Exception:
             return None
-    
-    def get_page_content(self, page_id: str) -> str:
+
+    async def get_page_content_async(self, page_id: str) -> str:
         try:
-            blocks = self.client.blocks.children.list(block_id=page_id)
-            content = self._extract_text_only(blocks.get('results', []))
-            return self._normalize_text(content)
+            blocks = await self._get_all_blocks_async(page_id)
+            return self._extract_text_from_blocks(blocks)
         except Exception:
             return ""
-    
-    def _extract_text_only(self, blocks: List[Dict]) -> List[str]:
-        content_lines = []
-        
-        for block in blocks:
-            try:
-                block_type = block.get('type')
-                block_content = block.get(block_type, {})
-                
-                if 'rich_text' in block_content:
-                    for rich_text in block_content['rich_text']:
-                        text = rich_text.get('plain_text', '')
-                        if text:
-                            content_lines.append(text)
-            except Exception:
-                continue
-        
-        return content_lines
-    
-    def _normalize_text(self, content_lines: List[str]) -> str:
-        content = " ".join(content_lines)
-        content = " ".join(content.split())
-        return content
 
-    def get_last_edited_time(self) -> str:
-        all_page_ids = self._get_top_level_page_ids(self.root_page_id)
+    async def _get_all_blocks_async(self, page_id: str) -> List[Dict]:
+        blocks = []
+        has_more, cursor = True, None
         
-        if not all_page_ids:
-            return None
-        
-        latest_time = None
-        
-        for page_id in all_page_ids:
-            try:
-                page_data = self.client.pages.retrieve(page_id=page_id)
-                page_time = page_data.get('last_edited_time')
+        while has_more:
+            params = {"block_id": page_id, "page_size": 100}
+            if cursor:
+                params["start_cursor"] = cursor
                 
-                if not latest_time or page_time > latest_time:
-                    latest_time = page_time
-            except Exception:
-                continue
-        
-        return latest_time
-
-
-
-# from notion_client import Client
-# from utils.config import Config
-# import time
-
-# class NotionClient:
-#     def __init__(self):
-#         self.client = Client(auth=Config.NOTION_API_KEY)
-#         self.database_id = Config.NOTION_DATABASE_ID
-    
-#     def get_all_documents_metadata(self):
-#         documents_metadata = []
-#         next_cursor = None
-#         has_more = True
-        
-#         while has_more:
-#             try:
-#                 response = self.query_database(page_size=100, start_cursor=next_cursor)
-#                 pages = response.get('results', [])
-#                 has_more = response.get('has_more', False)
-#                 next_cursor = response.get('next_cursor')
-                
-#                 for page in pages:
-#                     try:
-#                         properties = page.get('properties', {})
-                        
-#                         post_id = self._extract_property(properties, 'post')            
-#                         content_source_id = post_id
-#                         content = self.get_page_content(content_source_id)
-#                         page_url = f"https://www.notion.so/{post_id}"
-                                    
-#                         metadata = {
-#                             'id': page.get('id'),
-#                             'url': page_url,
-#                             'content': content,
-#                             'properties': {
-#                               'title': self._extract_property(properties, 'title'),
-#                               'post': post_id
-#                           }
-#                         }
-                        
-#                         documents_metadata.append(metadata)
-                        
-#                     except Exception as e:
-#                         continue
-                        
-#             except Exception as e:
-#                 if self._is_rate_limit_error(e):
-#                     time.sleep(1)
-#                     continue
-#                 raise
-        
-#         return documents_metadata
-    
-#     def _extract_property(self, properties, prop_name):        
-#         if prop_name not in properties:
-#             return None
-        
-#         prop_value = properties[prop_name]
-#         prop_type = prop_value.get('type')
-        
-#         if prop_type == 'title':
-#             return ''.join([text.get('plain_text', '') for text in prop_value.get('title', [])])
-#         elif prop_type == 'rich_text':
-#             return ''.join([text.get('plain_text', '') for text in prop_value.get('rich_text', [])])        
-#         else:
-#             return None
-    
-#     def query_database(self, page_size=100, start_cursor=None):
-#         params = {
-#             'database_id': self.database_id,
-#             'page_size': page_size
-#         }
-        
-#         if start_cursor:
-#             params['start_cursor'] = start_cursor
-        
-#         try:
-#             response = self.client.databases.query(**params)
-#             return response
-#         except Exception as e:
-#             if self._is_rate_limit_error(e):
-#                 time.sleep(1)
-#                 return self.query_database(page_size, start_cursor)  # Retry
-#             raise
-    
-#     def get_page_content(self, page_id):
-#         for attempt in range(3):
-#             try:
-#                 blocks = self.client.blocks.children.list(block_id=page_id)
-#                 content = self._parse_blocks(blocks.get('results', []))
-#                 return self._normalize_text(content)
-#             except Exception as e:
-#                 if self._is_rate_limit_error(e) and attempt < 2:
-#                     time.sleep(1)
-#                     continue
-#                 return ""
-    
-#     def _parse_blocks(self, blocks, level=0):
-#         content = []
-        
-#         for block in blocks:
-#             try:
-#                 block_type = block.get('type')
-#                 block_content = block.get(block_type, {})            
-                
-#                 text = ""
-#                 if 'rich_text' in block_content:
-#                     for rich_text in block_content['rich_text']:
-#                         text += rich_text.get('plain_text', '')            
-                
-#                 indent = "  " * level
-#                 content.append(f"{indent}{text}")            
-                
-#                 if block.get('has_children', False):
-#                     child_blocks = self.client.blocks.children.list(block_id=block['id'])
-#                     content.extend(self._parse_blocks(child_blocks.get('results', []), level + 1))
-                    
-#             except Exception:
-#                 continue
-        
-#         return content
-    
-#     def _normalize_text(self, content_lines):
-#         content = "\n".join(content_lines)
-#         content = " ".join(content.split())
-#         return content
-
-#     def get_last_edited_time(self):
-#         try:
-#             response = self.client.databases.query(
-#                 database_id=self.database_id,
-#                 page_size=1,
-#                 sorts=[{
-#                     "timestamp": "last_edited_time",
-#                     "direction": "descending"
-#                 }]
-#             )
+            response = await self.async_client.blocks.children.list(**params)
+            blocks.extend(response.get("results", []))
+            has_more = response.get("has_more", False)
+            cursor = response.get("next_cursor")
             
-#             if response.get('results'):
-#                 page = response['results'][0]
-#                 last_edited = page.get('last_edited_time')
-#                 return last_edited
-                
-#         except Exception as e:
-#             if self._is_rate_limit_error(e):
-#                 time.sleep(1)
-#                 return self.get_last_edited_time()
-        
-#         return None
+        return blocks
 
-#     def _is_rate_limit_error(self, error):
-#         return hasattr(error, 'status') and getattr(error, 'status') == 429
+    def _extract_title(self, page: Dict[str, Any]) -> str:
+        properties = page.get("properties", {})
+        if "title" in properties:
+            title_prop = properties["title"].get("title", [])
+            if title_prop:
+                text = title_prop[0].get("plain_text", "").strip()
+                if text and text.lower() != "page":
+                    return text
+        return None
+
+    def _extract_text_from_blocks(self, blocks: List[Dict]) -> str:
+        texts = []
+        for block in blocks:
+            block_type = block.get("type")
+            if not block_type:
+                continue
+                
+            block_content = block.get(block_type, {})
+            rich_texts = block_content.get("rich_text", [])
+            
+            for rich_text in rich_texts:
+                text = rich_text.get("plain_text", "").strip()
+                if text:
+                    texts.append(text)
+                    
+        return " ".join(texts)
+
+    def _parse_timestamp(self, timestamp_str: str) -> float:
+        """Convert ISO timestamp to UNIX timestamp"""
+        if not timestamp_str:
+            return 0
+        try:
+            dt = datetime.datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            return dt.timestamp()
+        except ValueError:
+            return 0
+
+    async def close(self):
+        await self.async_client.aclose()
+        

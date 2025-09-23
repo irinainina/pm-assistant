@@ -1,6 +1,7 @@
 import chromadb
 import hashlib
 from services.embeddings import EmbeddingService
+from typing import List, Dict
 
 class ChromaClient:
     def __init__(self):
@@ -128,3 +129,12 @@ class ChromaClient:
       except Exception as e:
           print(f"Error clearing collection: {e}")
           return False
+      
+    def update_documents(self, documents: List[Dict]):
+        if not documents:
+            return 0
+        
+        ids_to_remove = [doc['id'] for doc in documents]
+        self.collection.delete(ids=ids_to_remove)
+        
+        return self.add_documents(documents)
