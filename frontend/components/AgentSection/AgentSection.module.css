@@ -238,3 +238,29 @@
 .lowScore {
   color: red;
 }
+
+
+.updateButton {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  background-color: #10b981 !important;
+}
+
+.updateButton:hover:not(:disabled) {
+  background-color: #059669 !important;
+}
+
+.updateButton:disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.outdated {
+  background-color: #dc2626 !important;
+}
+
+.outdated:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+}
+
