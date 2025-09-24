@@ -4,8 +4,8 @@ from services.ai_engine import AIEngine
 import asyncio
 
 chroma_client = ChromaClient()
-ask_blueprint = Blueprint('ask', __name__)
 ai_engine = AIEngine()
+ask_blueprint = Blueprint('ask', __name__)
 
 def run_async(async_func):
     loop = asyncio.new_event_loop()
@@ -20,10 +20,11 @@ def ask_question():
     try:
         data = request.get_json()
         query = data.get('query')
+        history = data.get('history', [])
         
         if not query:
             return jsonify({'error': 'Query is required'}), 400
-        
+
         search_results = chroma_client.search(query, n_results=10)
         
         if not search_results or not search_results['documents']:
@@ -32,9 +33,13 @@ def ask_question():
                 'answer': 'I could not find any relevant information to answer your question.',
                 'sources': []
             })
-      
-        answer = run_async(ai_engine.generate_answer(query, search_results))
-        
+
+        answer = run_async(ai_engine.generate_answer(
+            query=query, 
+            search_results=search_results,
+            history=history
+        ))
+
         sources = chroma_client.get_unique_sources(search_results, max_sources=5)
         
         return jsonify({

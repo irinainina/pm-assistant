@@ -68,28 +68,48 @@ export default function AgentSection() {
 
     setIsLoading(true);
 
-    const userMessage = { role: "user", text: trimmed };
-    saveHistory([...messages, userMessage]);
+    const userMessage = { role: "user", content: trimmed, text: trimmed };
+    const updatedMessages = [...messages, userMessage];
+    saveHistory(updatedMessages);
 
     try {
+      const conversationHistory = updatedMessages
+        .filter((msg) => msg.role === "user" || msg.role === "agent")
+        .map((msg) => ({
+          role: msg.role === "user" ? "user" : "assistant",
+          content: msg.content || msg.text,
+        }));
+
       const res = await fetch(`${apiUrl}/api/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, conversation_id: "default" }),
+        body: JSON.stringify({
+          query: trimmed,
+          history: conversationHistory,
+        }),
       });
 
       const data = await res.json();
 
+      if (!res.ok) {
+        throw new Error(data.error || "Request failed");
+      }
+
       const agentMessage = {
         role: "agent",
-        text: data.answer || "No answer",
+        content: data.answer,
+        text: data.answer,
         sources: data.sources || [],
       };
 
-      saveHistory([...messages, userMessage, agentMessage]);
+      saveHistory([...updatedMessages, agentMessage]);
     } catch (err) {
-      const errorMessage = { role: "error", text: "Server error" };
-      saveHistory([...messages, errorMessage]);
+      const errorMessage = {
+        role: "error",
+        content: "Error: " + err.message,
+        text: "Error: " + err.message,
+      };
+      saveHistory([...updatedMessages, errorMessage]);
     } finally {
       setIsLoading(false);
       setInput("");
@@ -97,7 +117,10 @@ export default function AgentSection() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") sendMessage();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
   const handleNewChat = () => {
@@ -106,7 +129,9 @@ export default function AgentSection() {
   };
 
   useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -140,6 +165,7 @@ export default function AgentSection() {
         <button
           onClick={handleNewChat}
           className={`${styles.button} ${messages.length > 0 ? styles.active : styles.inactive}`}
+          disabled={messages.length === 0}
         >
           New Chat
         </button>
@@ -148,42 +174,48 @@ export default function AgentSection() {
 
       <div className={styles.chatWrapper}>
         <div ref={chatRef} className={messages.length > 0 ? styles.chat : ""}>
-          {messages.map((msg, idx) => (
-            <div key={idx} className={msg.role === "user" ? styles.user : styles.agent}>
-              <strong>{msg.role === "user" ? "You: " : "AI:"}</strong>
-              {msg.role === "user" ? (
-                msg.text
-              ) : (
-                <>
-                  <div className={styles.agentContent} dangerouslySetInnerHTML={{ __html: msg.text }} />
-                  {msg.sources && msg.sources.length > 0 && (
-                    <>
-                      <h3 className={styles.sourcesTitle}>Sources:</h3>
-                      <ul className={styles.sources}>
-                        {msg.sources.map((src, i) => (
-                          <li
-                            key={i}
-                            className={
-                              src.score >= 0.6
-                                ? styles.highScore
-                                : src.score >= 0.3
-                                ? styles.mediumScore
-                                : styles.lowScore
-                            }
-                          >
-                            <a href={src.url} target="_blank" rel="noopener noreferrer">
-                              {src.title}
-                            </a>{" "}
-                            - {src.score}
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </>
-              )}
+          {messages.length === 0 ? (
+            <div className={styles.welcome}>
+              <p>Welcome! Start a conversation by typing your question below.</p>
             </div>
-          ))}
+          ) : (
+            messages.map((msg, idx) => (
+              <div key={idx} className={styles[msg.role]}>
+                <strong>{msg.role === "user" ? "You: " : msg.role === "agent" ? "AI: " : "Error: "}</strong>
+                {msg.role === "user" || msg.role === "error" ? (
+                  msg.text
+                ) : (
+                  <>
+                    <div className={styles.agentContent} dangerouslySetInnerHTML={{ __html: msg.text }} />
+                    {msg.sources && msg.sources.length > 0 && (
+                      <>
+                        <h3 className={styles.sourcesTitle}>Sources:</h3>
+                        <ul className={styles.sources}>
+                          {msg.sources.map((src, i) => (
+                            <li
+                              key={i}
+                              className={
+                                src.score >= 0.6
+                                  ? styles.highScore
+                                  : src.score >= 0.3
+                                  ? styles.mediumScore
+                                  : styles.lowScore
+                              }
+                            >
+                              <a href={src.url} target="_blank" rel="noopener noreferrer">
+                                {src.title}
+                              </a>{" "}
+                              - {src.score}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -195,6 +227,7 @@ export default function AgentSection() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           className={styles.input}
+          disabled={isLoading}
         />
         <button
           onClick={sendMessage}

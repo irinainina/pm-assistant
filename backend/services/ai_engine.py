@@ -9,19 +9,28 @@ class AIEngine:
             Language.ENGLISH, Language.RUSSIAN, Language.UKRAINIAN
         ).build()
       
-    async def generate_answer(self, query, search_results):
+    async def generate_answer(self, query, search_results, history=None):
         context_text = self._extract_context_from_search(search_results)
         language = self._detect_language(query)
         system_prompt = self._create_system_prompt(language)
         user_prompt = self._create_user_prompt(query, context_text, language)
+    
+        messages = [{"role": "system", "content": system_prompt}]
+   
+        if history:
+            for msg in history:
+                role = msg.get("role")
+                content = msg.get("content", "")
+                
+                if role in ["user", "assistant"]:
+                    messages.append({"role": role, "content": content})
+ 
+        messages.append({"role": "user", "content": user_prompt})
         
         try:
             response = await self.client.chat.completions.create(
                 model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
                 max_tokens=800
             )
@@ -80,23 +89,19 @@ class AIEngine:
     def _create_user_prompt(self, query, context, language):
         prompts = {
             'english': f"""Context information:
-{context}
+            {context}
+            Question: {query}
+            Please provide a helpful answer in HTML format based on the context above.""",
 
-Question: {query}
-
-Please provide a helpful answer in HTML format based on the context above.""",
             'russian': f"""Контекстная информация:
-{context}
+            {context}
+            Вопрос: {query}
+            Пожалуйста, дай полезный ответ в формате HTML на основе контекста выше.""",
 
-Вопрос: {query}
-
-Пожалуйста, дай полезный ответ в формате HTML на основе контекста выше.""",
             'ukrainian': f"""Контекстна інформація:
-{context}
-
-Питання: {query}
-
-Будь ласка, надай корисну відповідь у форматі HTML на основі контексту вище."""
+            {context}
+            Питання: {query}
+            Будь ласка, надай корисну відповідь у форматі HTML на основі контексту вище."""
         }
         return prompts.get(language, prompts['english'])
     
