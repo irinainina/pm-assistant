@@ -30,33 +30,14 @@ def update_vector_db():
     async def async_handler():
         client = NotionClient()
         try:
-            our_last_update_ts = get_last_update_time()
+            documents = await client.get_all_documents_metadata()
+ 
+            chroma_client.clear_collection()
+            chroma_client.add_documents(documents)
             
-            if our_last_update_ts:
-                # Incremental update - only modified pages
-                modified_pages = await client.get_modified_pages_since(our_last_update_ts)
-                if modified_pages:
-                    documents = []
-                    tasks = [client._process_single_page_async(page) for page in modified_pages]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-                    documents = [result for result in results if result and not isinstance(result, Exception)]
-                    
-                    # Update only modified documents in ChromaDB
-                    chroma_client.update_documents(documents)
-                    added_count = len(documents)
-                    update_type = "incremental"
-                else:
-                    # No changes - database is up to date
-                    added_count = 0
-                    update_type = "no_changes"
-            else:
-                # Full initial sync
-                documents = await client.get_all_documents_metadata()
-                chroma_client.clear_collection()
-                chroma_client.add_documents(documents)
-                added_count = len(documents)
-                update_type = "full"
-
+            added_count = len(documents)
+            update_type = "full"
+            
             set_last_update_time()
             
             return jsonify({
@@ -100,41 +81,6 @@ def get_notion_status():
                 'notion_last_edited': latest_edit_time,
                 'our_last_update': our_last_update_iso,
                 'check_type': 'fast'
-            })
-        finally:
-            await client.close()
-    
-    return run_async(async_handler())
-
-@notion_blueprint.route('/notion/status/detailed', methods=['GET'])
-def get_detailed_status():
-    async def async_handler():
-        client = NotionClient()
-        try:
-            our_last_update_ts = get_last_update_time()
-            
-            if not our_last_update_ts:
-                latest_edit_time = await client.get_last_edited_time()
-                return jsonify({
-                    'is_actual': False,
-                    'notion_last_edited': latest_edit_time,
-                    'our_last_update': None,
-                    'changes_count': 0,
-                    'check_type': 'detailed'
-                })
-
-            modified_pages = await client.get_modified_pages_since(our_last_update_ts)
-            latest_edit_time = await client.get_last_edited_time()
-            
-            is_actual = len(modified_pages) == 0
-            our_last_update_iso = timestamp_to_iso(our_last_update_ts)
-            
-            return jsonify({
-                'is_actual': is_actual,
-                'notion_last_edited': latest_edit_time,
-                'our_last_update': our_last_update_iso,
-                'changes_count': len(modified_pages),
-                'check_type': 'detailed'
             })
         finally:
             await client.close()
