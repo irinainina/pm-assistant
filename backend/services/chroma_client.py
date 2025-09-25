@@ -1,131 +1,87 @@
-import os
-import hashlib
-import stat
-from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Set, Any
-
 import chromadb
-
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from services.embeddings import EmbeddingService
-
+from typing import List, Dict, Set
 
 class ChromaClient:
-    """
-    Обёртка над chromadb PersistentClient.
-    Использует абсолютный путь (можно переопределить через CHROMA_DB_PATH).
-    Хранит путь в self.chroma_path для внешней диагностики.
-    """
     def __init__(self):
-        # путь берём из окружения, если задан, иначе ./data/chroma
-        chroma_path = os.path.abspath(os.environ.get('CHROMA_DB_PATH', './data/chroma'))
-        # делаем директорию если её нет
-        os.makedirs(chroma_path, exist_ok=True)
-
-        # сохраняем путь для внешних проверок
-        self.chroma_path = chroma_path
-
-        print(f"[ChromaClient] Initializing ChromaDB at: {chroma_path}")
-        print(f"[ChromaClient] Directory exists: {os.path.exists(chroma_path)}")
-        try:
-            print(f"[ChromaClient] Directory permissions: {oct(stat.S_IMODE(os.stat(chroma_path).st_mode))}")
-        except Exception:
-            pass
-
-        try:
-            # инициализация chromadb PersistentClient с абсолютным путём
-            self.client = chromadb.PersistentClient(path=chroma_path)
-            # получаем/создаём коллекцию
-            self.collection = self.client.get_or_create_collection(
-                name="pm_documents",
-                metadata={"hnsw:space": "cosine"}
-            )
-            self.embedding_service = EmbeddingService()
-            self._embedding_cache: Dict[str, List[float]] = {}
-            print("[ChromaClient] ChromaDB initialized successfully")
-        except Exception as e:
-            print(f"[ChromaClient] ChromaDB initialization failed: {e}")
-            raise
-
+        self.client = chromadb.PersistentClient(path="./data/chroma")
+        self.collection = self.client.get_or_create_collection(
+            name="pm_documents",
+            metadata={"hnsw:space": "cosine"}
+        )
+        self.embedding_service = EmbeddingService()
+        self._embedding_cache = {}  # Embedding cache by content hash
+    
     def _generate_content_hash(self, content: str) -> str:
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()
-
+        return hashlib.sha256(content.encode()).hexdigest()
+    
     def _get_existing_hashes(self) -> Set[str]:
-        existing_hashes: Set[str] = set()
+        existing_hashes = set()
         try:
-            # пытаемся получить метаданные всех документов (ограничение по библиотеке)
             results = self.collection.get(include=['metadatas'], limit=10000)
-            metadatas = results.get('metadatas', [])
-            for metadata in metadatas:
-                # если metadata — список (возможный формат), обходим
-                if isinstance(metadata, list):
-                    for m in metadata:
-                        if isinstance(m, dict) and 'content_hash' in m:
-                            existing_hashes.add(m['content_hash'])
-                elif isinstance(metadata, dict):
-                    if 'content_hash' in metadata:
-                        existing_hashes.add(metadata['content_hash'])
-            # также допускаем вложенный формат results['metadatas'][0]
-            if not existing_hashes and isinstance(results.get('metadatas'), list) and results['metadatas']:
-                nested = results['metadatas'][0]
-                if isinstance(nested, list):
-                    for m in nested:
-                        if isinstance(m, dict) and 'content_hash' in m:
-                            existing_hashes.add(m['content_hash'])
+            for metadata in results['metadatas']:
+                if 'content_hash' in metadata:
+                    existing_hashes.add(metadata['content_hash'])
         except Exception:
-            # молча пропускаем ошибки доступа/форматов
             pass
         return existing_hashes
-
-    def _process_single_document(self, doc: Dict[str, Any], existing_hashes: Set[str]) -> Dict[str, List]:
+    
+    def _process_single_document(self, doc: Dict, existing_hashes: Set[str]) -> Dict:
         try:
-            chunks = self._chunk_document(doc.get('content', ''))
+            chunks = self._chunk_document(doc['content'])
             chunk_data = {
                 'texts': [],
                 'metadatas': [],
                 'ids': [],
                 'content_hashes': []
             }
-
+            
             for i, chunk in enumerate(chunks):
                 content_hash = self._generate_content_hash(chunk)
+                
                 if content_hash in existing_hashes:
                     continue
-
-                # определение языка через EmbeddingService
+                
                 language = self.embedding_service.detect_language(chunk)
-                chunk_id = f"{doc.get('id', 'unknown')}_{i}"
-
+                chunk_id = f"{doc['id']}_{i}"
+                
                 chunk_data['texts'].append(chunk)
                 chunk_data['metadatas'].append({
-                    'source_id': doc.get('id'),
-                    'source_url': doc.get('url', ''),
-                    'title': (doc.get('properties') or {}).get('title', 'Untitled'),
+                    'source_id': doc['id'],
+                    'source_url': doc['url'],
+                    'title': doc['properties'].get('title', 'Untitled'),
                     'chunk_index': i,
                     'language': language,
                     'content_hash': content_hash
                 })
                 chunk_data['ids'].append(chunk_id)
                 chunk_data['content_hashes'].append(content_hash)
-
+            
             return chunk_data
         except Exception:
             return {'texts': [], 'metadatas': [], 'ids': [], 'content_hashes': []}
-
-    def add_documents(self, documents: List[Dict[str, Any]], batch_size: int = 200) -> int:
+    
+    def add_documents(self, documents: List[Dict], batch_size: int = 200) -> int:
         if not documents:
             return 0
-
+        
         existing_hashes = self._get_existing_hashes()
-
+        
         all_chunk_data = {
             'texts': [],
             'metadatas': [],
             'ids': [],
             'content_hashes': []
         }
-
+        
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [executor.submit(self._process_single_document, doc, existing_hashes) for doc in documents]
+            futures = []
+            for doc in documents:
+                future = executor.submit(self._process_single_document, doc, existing_hashes)
+                futures.append(future)
+            
             for future in futures:
                 try:
                     chunk_data = future.result()
@@ -135,22 +91,21 @@ class ChromaClient:
                     all_chunk_data['content_hashes'].extend(chunk_data['content_hashes'])
                 except Exception:
                     pass
-
+        
         if not all_chunk_data['texts']:
             return 0
-
+        
         total_added = 0
         for i in range(0, len(all_chunk_data['texts']), batch_size):
             batch_texts = all_chunk_data['texts'][i:i + batch_size]
             batch_metadatas = all_chunk_data['metadatas'][i:i + batch_size]
             batch_ids = all_chunk_data['ids'][i:i + batch_size]
             batch_hashes = all_chunk_data['content_hashes'][i:i + batch_size]
-
+            
             embeddings = self._get_cached_embeddings(batch_texts, batch_hashes)
-
+            
             if embeddings:
                 try:
-                    # добавляем в коллекцию
                     self.collection.add(
                         embeddings=embeddings,
                         documents=batch_texts,
@@ -160,92 +115,104 @@ class ChromaClient:
                     total_added += len(batch_texts)
                 except Exception:
                     pass
-
+        
         return total_added
-
+    
     def _get_cached_embeddings(self, texts: List[str], hashes: List[str]) -> List[List[float]]:
-        """
-        Возвращает список эмбеддингов в том же порядке, что и texts.
-        Использует self._embedding_cache; генерирует недостающие через EmbeddingService.
-        """
-        embeddings_in_order: List[Any] = [None] * len(texts)
-        texts_to_gen: List[str] = []
-        gen_positions: List[int] = []
-
-        for idx, h in enumerate(hashes):
-            if h in self._embedding_cache:
-                embeddings_in_order[idx] = self._embedding_cache[h]
+        embeddings = []
+        texts_to_generate = []
+        hash_indices = []
+        
+        for i, content_hash in enumerate(hashes):
+            if content_hash in self._embedding_cache:
+                embeddings.append(self._embedding_cache[content_hash])
             else:
-                texts_to_gen.append(texts[idx])
-                gen_positions.append(idx)
-
-        if texts_to_gen:
-            new_embeddings = self.embedding_service.generate_embeddings(texts_to_gen)
-            # new_embeddings должно соответствовать order of texts_to_gen
-            for j, emb in enumerate(new_embeddings):
-                pos = gen_positions[j]
-                h = hashes[pos]
-                embeddings_in_order[pos] = emb
-                self._embedding_cache[h] = emb
-
-        # отфильтруем None (на случай ошибок)
-        return [e for e in embeddings_in_order if e is not None]
-
+                texts_to_generate.append(texts[i])
+                hash_indices.append(i)
+        
+        if texts_to_generate:
+            new_embeddings = self.embedding_service.generate_embeddings(texts_to_generate)
+            
+            for j, embedding in enumerate(new_embeddings):
+                original_index = hash_indices[j]
+                content_hash = hashes[original_index]
+                self._embedding_cache[content_hash] = embedding
+                embeddings.append(embedding)
+        
+        sorted_embeddings = [None] * len(texts)
+        for i, content_hash in enumerate(hashes):
+            for j, emb in enumerate(embeddings):
+                if hashes[i] == hashes[j % len(hashes)]:
+                    sorted_embeddings[i] = emb
+                    break
+        
+        return [emb for emb in sorted_embeddings if emb is not None]
+    
     def _chunk_document(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         if not text:
             return []
+        
         words = text.split()
         if len(words) <= chunk_size:
             return [text]
-
+        
         chunks = []
-        step = chunk_size - overlap if chunk_size > overlap else chunk_size
-        for i in range(0, len(words), step):
+        for i in range(0, len(words), chunk_size - overlap):
             chunk_words = words[i:i + chunk_size]
-            chunks.append(" ".join(chunk_words))
+            chunk_text = " ".join(chunk_words)
+            chunks.append(chunk_text)
+            
             if i + chunk_size >= len(words):
                 break
+        
         return chunks
-
-    def search(self, query: str, n_results: int = 10) -> Dict[str, Any]:
+    
+    def search(self, query: str, n_results: int = 10) -> Dict:
         try:
-            # generate_embeddings возвращает список эмбеддингов для каждого текста
-            q_embs = self.embedding_service.generate_embeddings([query])
+            query_embedding = self.embedding_service.generate_embeddings([query])
+            
             results = self.collection.query(
-                query_embeddings=q_embs,
+                query_embeddings=query_embedding,
                 n_results=n_results,
                 include=["documents", "metadatas", "distances"]
             )
+            
             return results
         except Exception:
             return {'documents': [], 'metadatas': [], 'distances': []}
-
-    def get_unique_sources(self, search_results: Dict[str, Any], max_sources: int = 5) -> List[Dict[str, Any]]:
+    
+    def get_unique_sources(self, search_results: Dict, max_sources: int = 5) -> List[Dict]:
         try:
-            unique_sources: Dict[str, Dict[str, Any]] = {}
-            distances = search_results.get('distances', [[]])[0] if search_results.get('distances') else []
-            metadatas = search_results.get('metadatas', [[]])[0] if search_results.get('metadatas') else []
-
+            unique_sources = {}
+            
+            distances = search_results.get('distances', [[]])[0]
+            metadatas = search_results.get('metadatas', [[]])[0]
+            
             for i, metadata in enumerate(metadatas):
-                if not isinstance(metadata, dict):
-                    continue
                 source_id = metadata.get('source_id')
                 if not source_id:
                     continue
+                    
                 distance = distances[i] if i < len(distances) else 1.0
                 similarity = round(1.0 - distance, 4)
+                
                 if source_id not in unique_sources or similarity > unique_sources[source_id]['score']:
                     unique_sources[source_id] = {
                         'url': metadata.get('source_url', ''),
                         'title': metadata.get('title', 'Untitled'),
                         'score': similarity
                     }
-
-            sorted_sources = sorted(unique_sources.values(), key=lambda x: x['score'], reverse=True)[:max_sources]
+            
+            sorted_sources = sorted(
+                unique_sources.values(),
+                key=lambda x: x['score'],
+                reverse=True
+            )[:max_sources]
+            
             return sorted_sources
         except Exception:
             return []
-
+    
     def clear_collection(self) -> bool:
         try:
             self.client.reset()
@@ -253,281 +220,31 @@ class ChromaClient:
             return True
         except Exception:
             return False
-
-    def update_documents(self, documents: List[Dict[str, Any]]) -> int:
+    
+    def update_documents(self, documents: List[Dict]) -> int:
         if not documents:
             return 0
+        
         try:
-            source_ids_to_remove = [doc.get('id') for doc in documents if 'id' in doc]
+            source_ids_to_remove = [doc['id'] for doc in documents]
+            
             for source_id in source_ids_to_remove:
                 try:
                     self.collection.delete(where={"source_id": source_id})
                 except Exception:
                     pass
+            
             return self.add_documents(documents)
         except Exception:
             return 0
-
-    def get_collection_stats(self) -> Dict[str, Any]:
+    
+    def get_collection_stats(self) -> Dict:
         try:
             count = self.collection.count()
             return {
                 'total_chunks': count,
-                'embedding_cache_size': len(self._embedding_cache),
-                'chroma_path': self.chroma_path
+                'embedding_cache_size': len(self._embedding_cache)
             }
         except Exception:
-            return {'total_chunks': 0, 'embedding_cache_size': 0, 'chroma_path': self.chroma_path}
-
-
-
-# import chromadb
-# import hashlib
-# from concurrent.futures import ThreadPoolExecutor
-# from services.embeddings import EmbeddingService
-# from typing import List, Dict, Set
-
-# class ChromaClient:
-#     def __init__(self):
-#         self.client = chromadb.PersistentClient(path="./data/chroma")
-#         self.collection = self.client.get_or_create_collection(
-#             name="pm_documents",
-#             metadata={"hnsw:space": "cosine"}
-#         )
-#         self.embedding_service = EmbeddingService()
-#         self._embedding_cache = {}  # Embedding cache by content hash
-    
-#     def _generate_content_hash(self, content: str) -> str:
-#         return hashlib.sha256(content.encode()).hexdigest()
-    
-#     def _get_existing_hashes(self) -> Set[str]:
-#         existing_hashes = set()
-#         try:
-#             results = self.collection.get(include=['metadatas'], limit=10000)
-#             for metadata in results['metadatas']:
-#                 if 'content_hash' in metadata:
-#                     existing_hashes.add(metadata['content_hash'])
-#         except Exception:
-#             pass
-#         return existing_hashes
-    
-#     def _process_single_document(self, doc: Dict, existing_hashes: Set[str]) -> Dict:
-#         try:
-#             chunks = self._chunk_document(doc['content'])
-#             chunk_data = {
-#                 'texts': [],
-#                 'metadatas': [],
-#                 'ids': [],
-#                 'content_hashes': []
-#             }
-            
-#             for i, chunk in enumerate(chunks):
-#                 content_hash = self._generate_content_hash(chunk)
-                
-#                 if content_hash in existing_hashes:
-#                     continue
-                
-#                 language = self.embedding_service.detect_language(chunk)
-#                 chunk_id = f"{doc['id']}_{i}"
-                
-#                 chunk_data['texts'].append(chunk)
-#                 chunk_data['metadatas'].append({
-#                     'source_id': doc['id'],
-#                     'source_url': doc['url'],
-#                     'title': doc['properties'].get('title', 'Untitled'),
-#                     'chunk_index': i,
-#                     'language': language,
-#                     'content_hash': content_hash
-#                 })
-#                 chunk_data['ids'].append(chunk_id)
-#                 chunk_data['content_hashes'].append(content_hash)
-            
-#             return chunk_data
-#         except Exception:
-#             return {'texts': [], 'metadatas': [], 'ids': [], 'content_hashes': []}
-    
-#     def add_documents(self, documents: List[Dict], batch_size: int = 200) -> int:
-#         if not documents:
-#             return 0
-        
-#         existing_hashes = self._get_existing_hashes()
-        
-#         all_chunk_data = {
-#             'texts': [],
-#             'metadatas': [],
-#             'ids': [],
-#             'content_hashes': []
-#         }
-        
-#         with ThreadPoolExecutor(max_workers=4) as executor:
-#             futures = []
-#             for doc in documents:
-#                 future = executor.submit(self._process_single_document, doc, existing_hashes)
-#                 futures.append(future)
-            
-#             for future in futures:
-#                 try:
-#                     chunk_data = future.result()
-#                     all_chunk_data['texts'].extend(chunk_data['texts'])
-#                     all_chunk_data['metadatas'].extend(chunk_data['metadatas'])
-#                     all_chunk_data['ids'].extend(chunk_data['ids'])
-#                     all_chunk_data['content_hashes'].extend(chunk_data['content_hashes'])
-#                 except Exception:
-#                     pass
-        
-#         if not all_chunk_data['texts']:
-#             return 0
-        
-#         total_added = 0
-#         for i in range(0, len(all_chunk_data['texts']), batch_size):
-#             batch_texts = all_chunk_data['texts'][i:i + batch_size]
-#             batch_metadatas = all_chunk_data['metadatas'][i:i + batch_size]
-#             batch_ids = all_chunk_data['ids'][i:i + batch_size]
-#             batch_hashes = all_chunk_data['content_hashes'][i:i + batch_size]
-            
-#             embeddings = self._get_cached_embeddings(batch_texts, batch_hashes)
-            
-#             if embeddings:
-#                 try:
-#                     self.collection.add(
-#                         embeddings=embeddings,
-#                         documents=batch_texts,
-#                         metadatas=batch_metadatas,
-#                         ids=batch_ids
-#                     )
-#                     total_added += len(batch_texts)
-#                 except Exception:
-#                     pass
-        
-#         return total_added
-    
-#     def _get_cached_embeddings(self, texts: List[str], hashes: List[str]) -> List[List[float]]:
-#         embeddings = []
-#         texts_to_generate = []
-#         hash_indices = []
-        
-#         for i, content_hash in enumerate(hashes):
-#             if content_hash in self._embedding_cache:
-#                 embeddings.append(self._embedding_cache[content_hash])
-#             else:
-#                 texts_to_generate.append(texts[i])
-#                 hash_indices.append(i)
-        
-#         if texts_to_generate:
-#             new_embeddings = self.embedding_service.generate_embeddings(texts_to_generate)
-            
-#             for j, embedding in enumerate(new_embeddings):
-#                 original_index = hash_indices[j]
-#                 content_hash = hashes[original_index]
-#                 self._embedding_cache[content_hash] = embedding
-#                 embeddings.append(embedding)
-        
-#         sorted_embeddings = [None] * len(texts)
-#         for i, content_hash in enumerate(hashes):
-#             for j, emb in enumerate(embeddings):
-#                 if hashes[i] == hashes[j % len(hashes)]:
-#                     sorted_embeddings[i] = emb
-#                     break
-        
-#         return [emb for emb in sorted_embeddings if emb is not None]
-    
-#     def _chunk_document(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-#         if not text:
-#             return []
-        
-#         words = text.split()
-#         if len(words) <= chunk_size:
-#             return [text]
-        
-#         chunks = []
-#         for i in range(0, len(words), chunk_size - overlap):
-#             chunk_words = words[i:i + chunk_size]
-#             chunk_text = " ".join(chunk_words)
-#             chunks.append(chunk_text)
-            
-#             if i + chunk_size >= len(words):
-#                 break
-        
-#         return chunks
-    
-#     def search(self, query: str, n_results: int = 10) -> Dict:
-#         try:
-#             query_embedding = self.embedding_service.generate_embeddings([query])
-            
-#             results = self.collection.query(
-#                 query_embeddings=query_embedding,
-#                 n_results=n_results,
-#                 include=["documents", "metadatas", "distances"]
-#             )
-            
-#             return results
-#         except Exception:
-#             return {'documents': [], 'metadatas': [], 'distances': []}
-    
-#     def get_unique_sources(self, search_results: Dict, max_sources: int = 5) -> List[Dict]:
-#         try:
-#             unique_sources = {}
-            
-#             distances = search_results.get('distances', [[]])[0]
-#             metadatas = search_results.get('metadatas', [[]])[0]
-            
-#             for i, metadata in enumerate(metadatas):
-#                 source_id = metadata.get('source_id')
-#                 if not source_id:
-#                     continue
-                    
-#                 distance = distances[i] if i < len(distances) else 1.0
-#                 similarity = round(1.0 - distance, 4)
-                
-#                 if source_id not in unique_sources or similarity > unique_sources[source_id]['score']:
-#                     unique_sources[source_id] = {
-#                         'url': metadata.get('source_url', ''),
-#                         'title': metadata.get('title', 'Untitled'),
-#                         'score': similarity
-#                     }
-            
-#             sorted_sources = sorted(
-#                 unique_sources.values(),
-#                 key=lambda x: x['score'],
-#                 reverse=True
-#             )[:max_sources]
-            
-#             return sorted_sources
-#         except Exception:
-#             return []
-    
-#     def clear_collection(self) -> bool:
-#         try:
-#             self.client.reset()
-#             self._embedding_cache.clear()
-#             return True
-#         except Exception:
-#             return False
-    
-#     def update_documents(self, documents: List[Dict]) -> int:
-#         if not documents:
-#             return 0
-        
-#         try:
-#             source_ids_to_remove = [doc['id'] for doc in documents]
-            
-#             for source_id in source_ids_to_remove:
-#                 try:
-#                     self.collection.delete(where={"source_id": source_id})
-#                 except Exception:
-#                     pass
-            
-#             return self.add_documents(documents)
-#         except Exception:
-#             return 0
-    
-#     def get_collection_stats(self) -> Dict:
-#         try:
-#             count = self.collection.count()
-#             return {
-#                 'total_chunks': count,
-#                 'embedding_cache_size': len(self._embedding_cache)
-#             }
-#         except Exception:
-#             return {'total_chunks': 0, 'embedding_cache_size': 0}
+            return {'total_chunks': 0, 'embedding_cache_size': 0}
         
