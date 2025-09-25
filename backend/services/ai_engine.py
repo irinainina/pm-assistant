@@ -1,6 +1,7 @@
 from openai import AsyncOpenAI
 from utils.config import Config
 from lingua import Language, LanguageDetectorBuilder
+import asyncio
 
 class AIEngine:
     def __init__(self):
@@ -10,8 +11,11 @@ class AIEngine:
         ).build()
       
     async def generate_answer(self, query, search_results, history=None):
-        context_text = self._extract_context_from_search(search_results)
-        language = self._detect_language(query)
+        language_task = asyncio.create_task(self._detect_language_async(query))
+        context_task = asyncio.create_task(self._extract_context_async(search_results))
+        
+        language, context_text = await asyncio.gather(language_task, context_task)
+        
         system_prompt = self._create_system_prompt(language)
         user_prompt = self._create_user_prompt(query, context_text, language)
     
@@ -29,14 +33,17 @@ class AIEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4-turbo-preview",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=800
+                max_tokens=800,
             )
             return response.choices[0].message.content
         except Exception as e:
             return f"Sorry, I encountered an error: {str(e)}"
+    
+    async def _extract_context_async(self, search_results, max_chunks=5, max_chars=4000):
+        return self._extract_context_from_search(search_results, max_chunks, max_chars)
     
     def _extract_context_from_search(self, search_results, max_chunks=5, max_chars=4000):
         if not search_results or not search_results.get('documents'):
@@ -65,6 +72,9 @@ class AIEngine:
             total_chars += len(chunk_text)
         
         return "\n\n".join(context_parts)
+    
+    async def _detect_language_async(self, text):
+        return self._detect_language(text)
     
     def _detect_language(self, text):
         try:
