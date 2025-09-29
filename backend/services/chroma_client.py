@@ -2,6 +2,7 @@ import chromadb
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from services.embeddings import EmbeddingService
+from datetime import datetime
 from typing import List, Dict, Set
 
 class ChromaClient:
@@ -12,7 +13,7 @@ class ChromaClient:
             metadata={"hnsw:space": "cosine"}
         )
         self.embedding_service = EmbeddingService()
-        self._embedding_cache = {}  # Embedding cache by content hash
+        self._embedding_cache = {}
     
     def _generate_content_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()
@@ -247,4 +248,19 @@ class ChromaClient:
             }
         except Exception:
             return {'total_chunks': 0, 'embedding_cache_size': 0}
-        
+
+    def set_last_update_time(self):
+        current_time = datetime.utcnow().isoformat() + "Z"
+        self.collection.upsert(
+            ids=["__last_update__"],
+            metadatas=[{"last_update_time": current_time}],
+            documents=["system_record"]
+        )
+
+    def get_last_update_time(self):
+        results = self.collection.get(ids=["__last_update__"])
+        if results and "metadatas" in results and results["metadatas"]:
+            meta = results["metadatas"][0]
+            if meta and "last_update_time" in meta:
+                return meta["last_update_time"]
+        return None

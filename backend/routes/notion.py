@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify
 from services.notion_client import NotionClient
 from services.chroma_client import ChromaClient
-from utils.db_state import get_last_update_time, set_last_update_time
 import datetime
 import asyncio
 
@@ -37,8 +36,8 @@ def update_vector_db():
             
             added_count = len(documents)
             update_type = "full"
-            
-            set_last_update_time()
+    
+            chroma_client.set_last_update_time()
             
             return jsonify({
                 'status': 'success',
@@ -54,35 +53,21 @@ def update_vector_db():
 @notion_blueprint.route('/notion/status', methods=['GET'])
 def get_notion_status():
     async def async_handler():
-        client = NotionClient()
-        try:
-            # Fast check - get only the latest edit time
-            latest_edit_time = await client.get_last_edited_time()
-            our_last_update_ts = get_last_update_time()
-            
-            if not our_last_update_ts:
-                return jsonify({
-                    'is_actual': False,
-                    'notion_last_edited': latest_edit_time,
-                    'our_last_update': None,
-                    'message': 'Database never synced'
-                })
+        async with NotionClient() as client:
+            notion_last_edited = await client.get_last_edited_time()
+            chroma_last_update = chroma_client.get_last_update_time()
 
-            if latest_edit_time:
-                notion_last_edited_ts = parse_timestamp(latest_edit_time)
-                is_actual = notion_last_edited_ts <= our_last_update_ts
-            else:
-                is_actual = True
+            notion_ts = parse_timestamp(notion_last_edited)
+            chroma_ts = parse_timestamp(chroma_last_update)
 
-            our_last_update_iso = timestamp_to_iso(our_last_update_ts)
-            
+            is_actual = False
+            if notion_ts and chroma_ts:
+                is_actual = chroma_ts >= notion_ts
+
             return jsonify({
-                'is_actual': is_actual,
-                'notion_last_edited': latest_edit_time,
-                'our_last_update': our_last_update_iso,
-                'check_type': 'fast'
+                "is_actual": is_actual,
+                "notion_last_edited": notion_last_edited,
+                "chroma_last_update": chroma_last_update
             })
-        finally:
-            await client.close()
-    
+
     return run_async(async_handler())
