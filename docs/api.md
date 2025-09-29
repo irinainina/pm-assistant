@@ -28,7 +28,7 @@ GET http://localhost:8000/api/notion/status
 {
   "is_actual": false,
   "notion_last_edited": "2024-01-15T10:30:00.000Z",
-  "our_last_update": "2024-01-15T10:25:00.123Z"
+  "chroma_last_update": "2024-01-15T10:25:00.123Z"
 }
 ```
 
