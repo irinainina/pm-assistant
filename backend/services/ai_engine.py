@@ -33,7 +33,7 @@ class AIEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4",
                 messages=messages,
                 temperature=0.7,
                 max_tokens=800,

@@ -17,13 +17,17 @@ class EmbeddingService:
     def _clean_text(self, text: str) -> str:
         if not text or not isinstance(text, str):
             return ""
+ 
+        try:
+            text = text.encode('utf-8', errors='replace').decode('utf-8')
+        except:
+            return ""        
+ 
         text = re.sub(r'\\"', '"', text)
         text = emoji.replace_emoji(text, replace="")
         text = re.sub(r"<.*?>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
-        max_length = 512
-        if len(text) > max_length:
-            text = text[:max_length]
+        
         return text
 
     def generate_embeddings(self, texts, batch_size: int = 32):

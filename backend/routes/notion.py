@@ -24,32 +24,6 @@ def parse_timestamp(timestamp_str):
 def timestamp_to_iso(timestamp):
     return datetime.datetime.utcfromtimestamp(timestamp).isoformat() + 'Z'
 
-@notion_blueprint.route('/notion/update_vector_db', methods=['GET'])
-def update_vector_db():
-    async def async_handler():
-        client = NotionClient()
-        try:
-            documents = await client.get_all_documents_metadata()
- 
-            chroma_client.clear_collection()
-            chroma_client.add_documents(documents)
-            
-            added_count = len(documents)
-            update_type = "full"
-    
-            chroma_client.set_last_update_time()
-            
-            return jsonify({
-                'status': 'success',
-                'message': f'Vector database updated with {added_count} documents',
-                'documents_processed': added_count,
-                'update_type': update_type
-            })
-        finally:
-            await client.close()
-    
-    return run_async(async_handler())
-
 @notion_blueprint.route('/notion/status', methods=['GET'])
 def get_notion_status():
     async def async_handler():
@@ -64,10 +38,50 @@ def get_notion_status():
             if notion_ts and chroma_ts:
                 is_actual = chroma_ts >= notion_ts
 
+            chroma_stats = chroma_client.get_collection_stats()
+
             return jsonify({
                 "is_actual": is_actual,
                 "notion_last_edited": notion_last_edited,
-                "chroma_last_update": chroma_last_update
+                "chroma_last_update": chroma_last_update,
+                "chroma_stats": chroma_stats
             })
 
+    return run_async(async_handler())
+
+@notion_blueprint.route('/notion/update_vector_db', methods=['GET'])
+def update_vector_db():
+    async def async_handler():
+        client = NotionClient()
+        try:
+            documents = await client.get_all_documents_metadata()
+
+            clear_result = chroma_client.clear_collection()
+            chunks_added = chroma_client.add_documents(documents)
+
+            chroma_stats = chroma_client.get_collection_stats()
+            
+            added_count = len(documents)
+    
+            chroma_client.set_last_update_time()
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Vector database updated with {added_count} documents',
+                'documents_processed': added_count,
+                'update_type': 'full',
+                'chroma_stats': {
+                    'chunks_added': chunks_added,
+                    'total_chunks': chroma_stats.get('total_chunks', 0),
+                    'clear_success': clear_result
+                }
+            })
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Error updating vector database: {str(e)}'
+            }), 500
+        finally:
+            await client.close()
+    
     return run_async(async_handler())

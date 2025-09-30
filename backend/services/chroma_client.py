@@ -30,8 +30,15 @@ class ChromaClient:
         return existing_hashes
     
     def _process_single_document(self, doc: Dict, existing_hashes: Set[str]) -> Dict:
-        try:
-            chunks = self._chunk_document(doc['content'])
+        try: 
+            title = doc.get('title') 
+            if not title and 'properties' in doc:
+                title = doc['properties'].get('title', 'Untitled')
+                
+            if not title:
+                title = 'Untitled'
+                
+            chunks = self._chunk_document(doc.get('content', ''))
             chunk_data = {
                 'texts': [],
                 'metadatas': [],
@@ -52,7 +59,7 @@ class ChromaClient:
                 chunk_data['metadatas'].append({
                     'source_id': doc['id'],
                     'source_url': doc['url'],
-                    'title': doc['properties'].get('title', 'Untitled'),
+                    'title': title,
                     'chunk_index': i,
                     'language': language,
                     'content_hash': content_hash
@@ -139,29 +146,36 @@ class ChromaClient:
                 content_hash = hashes[original_index]
                 self._embedding_cache[content_hash] = embedding
                 embeddings.append(embedding)
-        
-        sorted_embeddings = [None] * len(texts)
-        for i, content_hash in enumerate(hashes):
-            for j, emb in enumerate(embeddings):
-                if hashes[i] == hashes[j % len(hashes)]:
-                    sorted_embeddings[i] = emb
+       
+        sorted_embeddings = []
+        for content_hash in hashes:
+            for i, emb in enumerate(embeddings):
+                if content_hash == hashes[i % len(hashes)]:
+                    sorted_embeddings.append(emb)
                     break
         
-        return [emb for emb in sorted_embeddings if emb is not None]
+        return sorted_embeddings
     
-    def _chunk_document(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+    def _chunk_document(self, text: str, chunk_size: int = 400, overlap: int = 50) -> List[str]:
         if not text:
+            return []
+       
+        try:
+            if isinstance(text, str):
+                text = text.encode('utf-8', errors='replace').decode('utf-8')
+        except Exception:
             return []
         
         words = text.split()
         if len(words) <= chunk_size:
-            return [text]
+            return [text] if text.strip() else []
         
         chunks = []
         for i in range(0, len(words), chunk_size - overlap):
             chunk_words = words[i:i + chunk_size]
             chunk_text = " ".join(chunk_words)
-            chunks.append(chunk_text)
+            if chunk_text.strip():
+                chunks.append(chunk_text)
             
             if i + chunk_size >= len(words):
                 break
@@ -216,10 +230,13 @@ class ChromaClient:
     
     def clear_collection(self) -> bool:
         try:
-            self.client.reset()
+            all_results = self.collection.get(limit=10000)
+            if all_results and all_results['ids']:
+                self.collection.delete(ids=all_results['ids'])
             self._embedding_cache.clear()
             return True
-        except Exception:
+        except Exception as e:
+            print(f"Error clearing collection: {e}")
             return False
     
     def update_documents(self, documents: List[Dict]) -> int:
@@ -264,3 +281,4 @@ class ChromaClient:
             if meta and "last_update_time" in meta:
                 return meta["last_update_time"]
         return None
+
