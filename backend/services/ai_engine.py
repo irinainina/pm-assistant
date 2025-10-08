@@ -46,20 +46,21 @@ class AIEngine:
         return self._extract_context_from_search(search_results, max_chunks, max_chars)
     
     def _extract_context_from_search(self, search_results, max_chunks=5, max_chars=4000):
-        if not search_results or not search_results.get('documents'):
+        if not search_results or not search_results.get('results'):
             return "No relevant context found."
         
         context_parts = []
         total_chars = 0
-        documents = search_results['documents'][0]
-        metadatas = search_results['metadatas'][0]
         
-        for i, (document, metadata) in enumerate(zip(documents, metadatas)):
+        for i, result in enumerate(search_results['results']):
             if i >= max_chunks:
                 break
                 
-            source_title = metadata.get('title', 'Unknown source')
-            chunk_text = f"[Source: {source_title}]\n{document}"
+            source_title = result.get('title', 'Unknown source')
+            content_snippet = result.get('content_snippet', '')
+            relevance_score = result.get('relevance_score', 0)
+            
+            chunk_text = f"[Source: {source_title} | Relevance: {relevance_score}]\n{content_snippet}"
             
             if total_chars + len(chunk_text) > max_chars:
                 remaining_chars = max_chars - total_chars

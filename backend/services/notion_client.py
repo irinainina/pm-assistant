@@ -118,9 +118,6 @@ class NotionClient:
                     
         return " ".join(texts)
 
-    async def close(self):
-        await self.async_client.aclose()
-
     async def get_last_edited_time(self) -> Optional[str]:
         try:
             response = await self.async_client.search(

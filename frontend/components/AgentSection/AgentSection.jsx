@@ -195,9 +195,9 @@ export default function AgentSection() {
                             <li
                               key={i}
                               className={
-                                src.score >= 0.6
+                                src.score >= 0.75
                                   ? styles.highScore
-                                  : src.score >= 0.3
+                                  : src.score >= 0.5
                                   ? styles.mediumScore
                                   : styles.lowScore
                               }

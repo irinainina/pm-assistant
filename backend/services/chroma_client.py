@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from services.embeddings import EmbeddingService
 from datetime import datetime
 from typing import List, Dict, Set
+import tiktoken
 
 class ChromaClient:
     def __init__(self):
@@ -13,7 +14,7 @@ class ChromaClient:
             metadata={"hnsw:space": "cosine"}
         )
         self.embedding_service = EmbeddingService()
-        self._embedding_cache = {}
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
     
     def _generate_content_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()
@@ -29,16 +30,32 @@ class ChromaClient:
             pass
         return existing_hashes
     
+    def _split_into_chunks(self, text: str, max_tokens: int = 100) -> List[str]:
+        tokens = self.tokenizer.encode(text)
+        chunks = []
+        
+        for i in range(0, len(tokens), max_tokens):
+            chunk_tokens = tokens[i:i + max_tokens]
+            chunk_text = self.tokenizer.decode(chunk_tokens)
+            chunks.append(chunk_text)
+        
+        return chunks
+    
     def _process_single_document(self, doc: Dict, existing_hashes: Set[str]) -> Dict:
         try: 
-            title = doc.get('title') 
+            title = doc.get('title', '')
             if not title and 'properties' in doc:
                 title = doc['properties'].get('title', 'Untitled')
-                
             if not title:
                 title = 'Untitled'
-                
-            chunks = self._chunk_document(doc.get('content', ''))
+            
+            content = doc.get('content', '')
+            page_id = doc['id']
+            url = doc['url']
+            
+            full_content = content
+            page_language = self.embedding_service.detect_language(f"{title} {content}")
+            
             chunk_data = {
                 'texts': [],
                 'metadatas': [],
@@ -46,26 +63,50 @@ class ChromaClient:
                 'content_hashes': []
             }
             
-            for i, chunk in enumerate(chunks):
-                content_hash = self._generate_content_hash(chunk)
+            if title:
+                title_text = title.strip()
+                title_hash = self._generate_content_hash(title_text)
                 
-                if content_hash in existing_hashes:
-                    continue
+                if title_hash not in existing_hashes:
+                    chunk_data['texts'].append(title_text)
+                    chunk_data['metadatas'].append({
+                        'source_id': page_id,
+                        'source_url': url,
+                        'title': title,
+                        'chunk_type': 'title',
+                        'language': page_language,
+                        'content_hash': title_hash,
+                        'full_content': full_content
+                    })
+                    chunk_data['ids'].append(f"{page_id}_title")
+                    chunk_data['content_hashes'].append(title_hash)
+            
+            if content:
+                content_chunks = self._split_into_chunks(content, max_tokens=100)
                 
-                language = self.embedding_service.detect_language(chunk)
-                chunk_id = f"{doc['id']}_{i}"
-                
-                chunk_data['texts'].append(chunk)
-                chunk_data['metadatas'].append({
-                    'source_id': doc['id'],
-                    'source_url': doc['url'],
-                    'title': title,
-                    'chunk_index': i,
-                    'language': language,
-                    'content_hash': content_hash
-                })
-                chunk_data['ids'].append(chunk_id)
-                chunk_data['content_hashes'].append(content_hash)
+                for i, chunk in enumerate(content_chunks):
+                    if not chunk.strip():
+                        continue
+                        
+                    chunk_text = chunk.strip()
+                    content_hash = self._generate_content_hash(chunk_text)
+                    
+                    if content_hash in existing_hashes:
+                        continue
+                    
+                    chunk_data['texts'].append(chunk_text)
+                    chunk_data['metadatas'].append({
+                        'source_id': page_id,
+                        'source_url': url,
+                        'title': title,
+                        'chunk_type': 'content',
+                        'chunk_index': i,
+                        'language': page_language,
+                        'content_hash': content_hash,
+                        'full_content': full_content
+                    })
+                    chunk_data['ids'].append(f"{page_id}_content_{i}")
+                    chunk_data['content_hashes'].append(content_hash)
             
             return chunk_data
         except Exception:
@@ -108,9 +149,8 @@ class ChromaClient:
             batch_texts = all_chunk_data['texts'][i:i + batch_size]
             batch_metadatas = all_chunk_data['metadatas'][i:i + batch_size]
             batch_ids = all_chunk_data['ids'][i:i + batch_size]
-            batch_hashes = all_chunk_data['content_hashes'][i:i + batch_size]
             
-            embeddings = self._get_cached_embeddings(batch_texts, batch_hashes)
+            embeddings = self.embedding_service.generate_embeddings(batch_texts)
             
             if embeddings:
                 try:
@@ -126,117 +166,137 @@ class ChromaClient:
         
         return total_added
     
-    def _get_cached_embeddings(self, texts: List[str], hashes: List[str]) -> List[List[float]]:
-        embeddings = []
-        texts_to_generate = []
-        hash_indices = []
-        
-        for i, content_hash in enumerate(hashes):
-            if content_hash in self._embedding_cache:
-                embeddings.append(self._embedding_cache[content_hash])
-            else:
-                texts_to_generate.append(texts[i])
-                hash_indices.append(i)
-        
-        if texts_to_generate:
-            new_embeddings = self.embedding_service.generate_embeddings(texts_to_generate)
-            
-            for j, embedding in enumerate(new_embeddings):
-                original_index = hash_indices[j]
-                content_hash = hashes[original_index]
-                self._embedding_cache[content_hash] = embedding
-                embeddings.append(embedding)
-       
-        sorted_embeddings = []
-        for content_hash in hashes:
-            for i, emb in enumerate(embeddings):
-                if content_hash == hashes[i % len(hashes)]:
-                    sorted_embeddings.append(emb)
-                    break
-        
-        return sorted_embeddings
-    
-    def _chunk_document(self, text: str, chunk_size: int = 400, overlap: int = 50) -> List[str]:
-        if not text:
-            return []
-       
+    def search(self, query: str, n_results: int = 20) -> Dict:
         try:
-            if isinstance(text, str):
-                text = text.encode('utf-8', errors='replace').decode('utf-8')
-        except Exception:
-            return []
-        
-        words = text.split()
-        if len(words) <= chunk_size:
-            return [text] if text.strip() else []
-        
-        chunks = []
-        for i in range(0, len(words), chunk_size - overlap):
-            chunk_words = words[i:i + chunk_size]
-            chunk_text = " ".join(chunk_words)
-            if chunk_text.strip():
-                chunks.append(chunk_text)
-            
-            if i + chunk_size >= len(words):
-                break
-        
-        return chunks
-    
-    def search(self, query: str, n_results: int = 10) -> Dict:
-        try:
-            query_embedding = self.embedding_service.generate_embeddings([query])
-            
-            results = self.collection.query(
-                query_embeddings=query_embedding,
-                n_results=n_results,
+            query_embeddings = self.embedding_service.generate_embeddings([
+                query,
+                f"{query} (у назві або темі статті)"
+            ])
+
+            semantic_results = self.collection.query(
+                query_embeddings=[query_embeddings[0]],
+                n_results=min(n_results * 5, 100),
                 include=["documents", "metadatas", "distances"]
             )
-            
-            return results
+
+            title_results = self.collection.query(
+                query_embeddings=[query_embeddings[1]],
+                n_results=min(n_results * 5, 100),
+                include=["documents", "metadatas", "distances"]
+            )
+
+            merged = {
+                "documents": [[]],
+                "metadatas": [[]],
+                "distances": [[]]
+            }
+
+            if semantic_results and semantic_results.get("metadatas"):
+                merged["documents"][0].extend(semantic_results["documents"][0])
+                merged["metadatas"][0].extend(semantic_results["metadatas"][0])
+                merged["distances"][0].extend(semantic_results["distances"][0])
+
+            if title_results and title_results.get("metadatas"):
+                merged["documents"][0].extend(title_results["documents"][0])
+                merged["metadatas"][0].extend(title_results["metadatas"][0])
+                merged["distances"][0].extend(title_results["distances"][0])
+
+            return self._group_results_by_page(merged, n_results)
         except Exception:
-            return {'documents': [], 'metadatas': [], 'distances': []}
+            return {"results": [], "total_pages": 0}
+
     
-    def get_unique_sources(self, search_results: Dict, max_sources: int = 5) -> List[Dict]:
+    def _group_results_by_page(self, raw_results: Dict, max_pages: int = 10) -> Dict:
         try:
-            unique_sources = {}
+            pages = {}
             
-            distances = search_results.get('distances', [[]])[0]
-            metadatas = search_results.get('metadatas', [[]])[0]
+            distances = raw_results.get('distances', [[]])[0]
+            metadatas = raw_results.get('metadatas', [[]])[0]
+            documents = raw_results.get('documents', [[]])[0]
             
             for i, metadata in enumerate(metadatas):
+                if i >= len(distances) or i >= len(documents):
+                    continue
+                    
                 source_id = metadata.get('source_id')
                 if not source_id:
                     continue
-                    
-                distance = distances[i] if i < len(distances) else 1.0
-                similarity = round(1.0 - distance, 4)
                 
-                if source_id not in unique_sources or similarity > unique_sources[source_id]['score']:
-                    unique_sources[source_id] = {
+                distance = distances[i]
+                similarity = 1.0 / (1.0 + float(distance))
+                chunk_type = metadata.get('chunk_type', 'content')
+                
+                if source_id not in pages:
+                    pages[source_id] = {
                         'url': metadata.get('source_url', ''),
                         'title': metadata.get('title', 'Untitled'),
-                        'score': similarity
+                        'page_id': source_id,
+                        'title_similarity': 0.0,
+                        'content_similarities': [],
+                        'language': metadata.get('language', 'unknown'),
+                        'full_content': metadata.get('full_content', '')
                     }
+                
+                if chunk_type == 'title':
+                    pages[source_id]['title_similarity'] = max(pages[source_id]['title_similarity'], similarity)
+                elif chunk_type == 'content':
+                    pages[source_id]['content_similarities'].append(similarity)
             
-            sorted_sources = sorted(
-                unique_sources.values(),
-                key=lambda x: x['score'],
-                reverse=True
-            )[:max_sources]
+            final_results = []
+            for page_id, p in pages.items():
+                title_similarity = p['title_similarity']
+                best_content_similarity = max(p['content_similarities']) if p['content_similarities'] else 0.0
+                
+                title_weight = 5.0
+                content_weight = 1.0
+                final_score = (title_similarity * title_weight + best_content_similarity * content_weight) / (title_weight + content_weight)
+                
+                match_type = 'none'
+                if title_similarity >= best_content_similarity and title_similarity > 0:
+                    match_type = 'title'
+                elif best_content_similarity > 0:
+                    match_type = 'content'
+                    
+                final_results.append({
+                    'page_id': page_id,
+                    'url': p['url'],
+                    'title': p['title'],
+                    'relevance_score': round(final_score, 4),
+                    'title_similarity': round(title_similarity, 4),
+                    'content_similarity': round(best_content_similarity, 4),
+                    'content_snippet': p['full_content'],
+                    'match_type': match_type,
+                    'language': p['language']
+                })
             
-            return sorted_sources
+            final_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+            
+            return {
+                'results': final_results[:max_pages],
+                'total_pages': len(final_results)
+            }
+            
         except Exception:
-            return []
+            return {'results': [], 'total_pages': 0}
+    
+    def get_unique_sources(self, search_results: Dict, max_sources: int = 5) -> List[Dict]:
+        results = search_results.get('results', [])
+        return [
+            {
+                'url': result['url'],
+                'title': result['title'],
+                'score': result['relevance_score']
+            }
+            for result in results[:max_sources]
+        ]
     
     def clear_collection(self) -> bool:
         try:
             all_results = self.collection.get(limit=10000)
             if all_results and all_results['ids']:
                 self.collection.delete(ids=all_results['ids'])
-            self._embedding_cache.clear()
             return True
-        except Exception as e:
-            print(f"Error clearing collection: {e}")
+        except Exception:
             return False
     
     def update_documents(self, documents: List[Dict]) -> int:
@@ -260,11 +320,10 @@ class ChromaClient:
         try:
             count = self.collection.count()
             return {
-                'total_chunks': count,
-                'embedding_cache_size': len(self._embedding_cache)
+                'total_chunks': count
             }
         except Exception:
-            return {'total_chunks': 0, 'embedding_cache_size': 0}
+            return {'total_chunks': 0}
 
     def set_last_update_time(self):
         current_time = datetime.utcnow().isoformat() + "Z"
@@ -281,4 +340,3 @@ class ChromaClient:
             if meta and "last_update_time" in meta:
                 return meta["last_update_time"]
         return None
-

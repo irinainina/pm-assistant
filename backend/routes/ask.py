@@ -27,7 +27,7 @@ def ask_question():
 
         search_results = chroma_client.search(query, n_results=10)
         
-        if not search_results or not search_results['documents']:
+        if not search_results or not search_results['results']:
             return jsonify({
                 'query': query,
                 'answer': 'I could not find any relevant information to answer your question.',
@@ -40,7 +40,14 @@ def ask_question():
             history=history
         ))
 
-        sources = chroma_client.get_unique_sources(search_results, max_sources=5)
+        sources = []
+        if search_results and search_results.get('results'):
+            for result in search_results['results'][:5]:
+                sources.append({
+                    'title': result['title'],
+                    'url': result['url'],
+                    'score': result['relevance_score']
+                })
         
         return jsonify({
             'query': query,
