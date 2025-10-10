@@ -27,70 +27,61 @@ def run_async(async_func):
     except Exception as e:
         raise Exception(f"Async execution failed: {str(e)}")
 
-@ask_blueprint.route('/ask', methods=['GET'])
+@ask_blueprint.route('/ask', methods=['POST'])
 def ask_question():
+    print(">>> /api/ask hit")
     total_start_time = time.time()
-    
-    try:
-        query = request.args.get('q')
-        history = request.args.get('history', '')
-        
-        if not query:
-            return jsonify({'error': 'Query parameter "q" is required'}), 400
 
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON body"}), 400
+
+    query = data.get('query')
+    history = data.get('history', [])
+
+    if not query:
+        return jsonify({'error': 'Field "query" is required'}), 400
+
+    try:
         search_start_time = time.time()
         search_results = chroma_client.search(query, n_results=10)
         search_time = int((time.time() - search_start_time) * 1000)
 
-        if not search_results or not search_results['results']:
-            total_time = int((time.time() - total_start_time) * 1000)
+        if not search_results or not search_results.get('results'):
             return jsonify({
                 'query': query,
-                'answer': 'I could not find any relevant information to answer your question.',
+                'answer': 'No relevant information found.',
                 'sources': [],
-                'timing': {
-                    'search': search_time,
-                    'ai_processing': 0,
-                    'total': total_time
-                }
+                'timing': {'search': search_time}
             })
 
-        ai_start_time = time.time()
-        answer = run_async(ai_engine.generate_answer(
-            query=query, 
-            search_results=search_results,
-            history=history.split('|') if history else []
-        ))
-        ai_time = int((time.time() - ai_start_time) * 1000)
+        try:
+            ai_start_time = time.time()
+            answer = run_async(ai_engine.generate_answer(
+                query=query,
+                search_results=search_results,
+                history=history
+            ))
+            ai_time = int((time.time() - ai_start_time) * 1000)
+        except Exception as e:
+            print("AIEngine error:", e)
+            return jsonify({'error': str(e)}), 500
 
-        sources = []
-        if search_results and search_results.get('results'):
-            for result in search_results['results'][:5]:
-                sources.append({
-                    'title': result['title'],
-                    'url': result['url'],
-                    'score': result['relevance_score']
-                })
+        sources = [
+            {'title': r['title'], 'url': r['url'], 'score': r['relevance_score']}
+            for r in search_results.get('results', [])[:5]
+        ]
 
-        total_time = int((time.time() - total_start_time) * 1000)
-        
+        print(">>> answer sent successfully")
         return jsonify({
             'query': query,
             'answer': answer,
             'sources': sources,
-            'timing': {
-                'search': search_time,
-                'ai_processing': ai_time,
-                'total': total_time
-            }
+            'timing': {'search': search_time, 'ai': ai_time}
         })
-        
+
     except Exception as e:
-        total_time = int((time.time() - total_start_time) * 1000)
-        return jsonify({
-            'error': str(e),
-            'timing': {
-                'total': total_time
-            }
-        }), 500
+        print("Unhandled error:", e)
+        return jsonify({'error': str(e)}), 500
+
     

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from services.embeddings import EmbeddingService
 from typing import List, Dict, Set
 import tiktoken
+import datetime
 
 class ChromaClient:
     def __init__(self):
@@ -14,10 +15,17 @@ class ChromaClient:
         )
         self.embedding_service = EmbeddingService()
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-    
+        self._last_update_time = None
+
+    def set_last_update_time(self):
+        self._last_update_time = datetime.datetime.utcnow().isoformat() + "Z"
+
+    def get_last_update_time(self):
+        return self._last_update_time
+
     def _generate_content_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()
-    
+
     def _get_existing_hashes(self) -> Set[str]:
         existing_hashes = set()
         try:
@@ -28,7 +36,7 @@ class ChromaClient:
         except Exception:
             pass
         return existing_hashes
-    
+
     def _split_into_chunks(self, text: str, max_tokens: int = 100) -> List[str]:
         tokens = self.tokenizer.encode(text)
         chunks = []
@@ -37,23 +45,18 @@ class ChromaClient:
             chunk_text = self.tokenizer.decode(chunk_tokens)
             chunks.append(chunk_text)
         return chunks
-    
+
     def _process_single_document(self, doc: Dict, existing_hashes: Set[str]) -> Dict:
         try: 
-            title = doc.get('title', '')
-            if not title and 'properties' in doc:
-                title = doc['properties'].get('title', 'Untitled')
-            if not title:
-                title = 'Untitled'
-            
+            title = doc.get('title', '') or doc.get('properties', {}).get('title', 'Untitled') or 'Untitled'
             content = doc.get('content', '')
             page_id = doc['id']
             url = doc['url']
             full_content = content
             page_language = self.embedding_service.detect_language(f"{title} {content}")
-            
+
             chunk_data = {'texts': [], 'metadatas': [], 'ids': [], 'content_hashes': []}
-            
+
             if title:
                 title_text = title.strip()
                 title_hash = self._generate_content_hash(title_text)
@@ -70,7 +73,7 @@ class ChromaClient:
                     })
                     chunk_data['ids'].append(f"{page_id}_title")
                     chunk_data['content_hashes'].append(title_hash)
-            
+
             if content:
                 content_chunks = self._split_into_chunks(content, max_tokens=100)
                 for i, chunk in enumerate(content_chunks):
@@ -93,10 +96,11 @@ class ChromaClient:
                     })
                     chunk_data['ids'].append(f"{page_id}_content_{i}")
                     chunk_data['content_hashes'].append(content_hash)
+
             return chunk_data
         except Exception:
             return {'texts': [], 'metadatas': [], 'ids': [], 'content_hashes': []}
-    
+
     def add_documents(self, documents: List[Dict], batch_size: int = 200) -> int:
         if not documents:
             return 0
@@ -133,7 +137,7 @@ class ChromaClient:
                 except Exception:
                     pass
         return total_added
-    
+
     def search(self, query: str, n_results: int = 20) -> Dict:
         try:
             query_embeddings = self.embedding_service.generate_embeddings([
@@ -169,6 +173,7 @@ class ChromaClient:
             distances = raw_results.get('distances', [[]])[0]
             metadatas = raw_results.get('metadatas', [[]])[0]
             documents = raw_results.get('documents', [[]])[0]
+
             for i, metadata in enumerate(metadatas):
                 if i >= len(distances) or i >= len(documents):
                     continue
@@ -178,6 +183,7 @@ class ChromaClient:
                 distance = distances[i]
                 similarity = 1.0 / (1.0 + float(distance))
                 chunk_type = metadata.get('chunk_type', 'content')
+
                 if source_id not in pages:
                     pages[source_id] = {
                         'url': metadata.get('source_url', ''),
@@ -188,6 +194,7 @@ class ChromaClient:
                         'language': metadata.get('language', 'unknown'),
                         'full_content': metadata.get('full_content', '')
                     }
+
                 if chunk_type == 'title':
                     pages[source_id]['title_similarity'] = max(pages[source_id]['title_similarity'], similarity)
                 elif chunk_type == 'content':
@@ -250,12 +257,25 @@ class ChromaClient:
             min_score = min(r['raw_score'] for r in final_results)
             max_score = max(r['raw_score'] for r in final_results)
             for r in final_results:
-                if max_score != min_score:
-                    r['relevance_score'] = round((r['raw_score'] - min_score) / (max_score - min_score), 4)
-                else:
-                    r['relevance_score'] = 0.0
+                r['relevance_score'] = round((r['raw_score'] - min_score) / (max_score - min_score), 4) if max_score != min_score else 0.0
 
             final_results.sort(key=lambda x: x['relevance_score'], reverse=True)
             return {'results': final_results[:max_pages], 'total_pages': len(final_results)}
         except Exception:
             return {'results': [], 'total_pages': 0}
+        
+    def get_collection_stats(self) -> dict:
+        try:
+            collection_info = self.collection.count()
+            return {
+                "total_chunks": collection_info.get("count", 0)
+            }
+        except Exception:
+            return {"total_chunks": 0}
+
+    def clear_collection(self) -> bool:
+        try:
+            self.collection.delete()
+            return True
+        except Exception:
+            return False
