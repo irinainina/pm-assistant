@@ -81,7 +81,7 @@ export default function AgentSection() {
         }));
 
       const res = await fetch(`${apiUrl}/api/ask`, {
-        method: "POST",
+        method: "GET",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: trimmed,
