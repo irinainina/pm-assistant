@@ -80,7 +80,7 @@ export default function AgentSection() {
           content: msg.content || msg.text,
         }));
 
-      const res = await fetch(`${apiUrl}/api/ask`, {
+      const res = await fetch(`${apiUrl}/api/ask-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,20 +89,75 @@ export default function AgentSection() {
         }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || "Request failed");
+        throw new Error("Request failed");
       }
 
-      const agentMessage = {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedAnswer = "";
+
+      const tempMessage = {
         role: "agent",
-        content: data.answer,
-        text: data.answer,
-        sources: data.sources || [],
+        content: "",
+        text: "",
+        sources: [],
+        isStreaming: true,
       };
 
-      saveHistory([...updatedMessages, agentMessage]);
+      const streamingMessages = [...updatedMessages, tempMessage];
+      saveHistory(streamingMessages);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+              if (data.chunk) {
+                accumulatedAnswer += data.chunk;
+
+                const updatedStreamingMessages = [
+                  ...updatedMessages,
+                  {
+                    role: "agent",
+                    content: accumulatedAnswer,
+                    text: accumulatedAnswer,
+                    sources: [],
+                    isStreaming: true,
+                  },
+                ];
+                saveHistory(updatedStreamingMessages);
+              }
+
+              if (data.done) {
+                const finalMessage = {
+                  role: "agent",
+                  content: accumulatedAnswer,
+                  text: accumulatedAnswer,
+                  sources: data.sources || [],
+                  isStreaming: false,
+                };
+                saveHistory([...updatedMessages, finalMessage]);
+                setIsLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.error("Error parsing stream data:", e);
+            }
+          }
+        }
+      }
     } catch (err) {
       const errorMessage = {
         role: "error",
@@ -110,9 +165,7 @@ export default function AgentSection() {
         text: "Error: " + err.message,
       };
       saveHistory([...updatedMessages, errorMessage]);
-    } finally {
       setIsLoading(false);
-      setInput("");
     }
   };
 

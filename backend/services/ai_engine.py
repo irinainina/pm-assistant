@@ -107,3 +107,40 @@ class AIEngine:
         }
         return prompts.get(language, prompts['english'])
     
+    async def generate_answer_stream(self, query, search_results, history=None):
+        language_task = asyncio.create_task(self._detect_language_async(query))
+        context_task = asyncio.create_task(self._extract_context_async(search_results))
+        
+        language, context_text = await asyncio.gather(language_task, context_task)
+        
+        system_prompt = self._create_system_prompt(language)
+        user_prompt = self._create_user_prompt(query, context_text, language)
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        if history:
+            for msg in history:
+                role = msg.get("role")
+                content = msg.get("content", "")
+                
+                if role in ["user", "assistant"]:
+                    messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": user_prompt})
+        
+        try:
+            stream = await self.client.chat.completions.create(
+                model="gpt-4-1106-preview",
+                messages=messages,
+                temperature=0.5,
+                max_tokens=1500,
+                stream=True
+            )
+            
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            yield f"Sorry, I encountered an error: {str(e)}"
+    
