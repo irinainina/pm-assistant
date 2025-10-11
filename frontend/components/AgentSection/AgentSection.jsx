@@ -174,12 +174,7 @@ export default function AgentSection() {
 
       <div className={styles.chatWrapper}>
         <div ref={chatRef} className={messages.length > 0 ? styles.chat : ""}>
-          {messages.length === 0 ? (
-            <div className={styles.welcome}>
-              <p>Welcome! Start a conversation by typing your question below.</p>
-            </div>
-          ) : (
-            messages.map((msg, idx) => (
+          {messages.map((msg, idx) => (
               <div key={idx} className={styles[msg.role]}>
                 <strong>{msg.role === "user" ? "You: " : msg.role === "agent" ? "AI: " : "Error: "}</strong>
                 {msg.role === "user" || msg.role === "error" ? (
@@ -197,7 +192,7 @@ export default function AgentSection() {
                               className={
                                 src.score >= 0.75
                                   ? styles.highScore
-                                  : src.score >= 0.5
+                                  : src.score >= 0.45
                                   ? styles.mediumScore
                                   : styles.lowScore
                               }
@@ -215,7 +210,7 @@ export default function AgentSection() {
                 )}
               </div>
             ))
-          )}
+          }
         </div>
       </div>
 

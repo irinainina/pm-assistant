@@ -33,44 +33,35 @@ class AIEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4-1106-preview",
                 messages=messages,
-                temperature=0.7,
-                max_tokens=800,
+                temperature=0.5,
+                max_tokens=1500,
             )
             return response.choices[0].message.content
         except Exception as e:
             return f"Sorry, I encountered an error: {str(e)}"
     
-    async def _extract_context_async(self, search_results, max_chunks=5, max_chars=4000):
+    async def _extract_context_async(self, search_results, max_chunks=5, max_chars=25000):
         return self._extract_context_from_search(search_results, max_chunks, max_chars)
     
-    def _extract_context_from_search(self, search_results, max_chunks=5, max_chars=4000):
+    def _extract_context_from_search(self, search_results, max_chunks=5, max_chars=25000):
         if not search_results or not search_results.get('results'):
             return "No relevant context found."
         
         context_parts = []
-        total_chars = 0
         
-        for i, result in enumerate(search_results['results']):
-            if i >= max_chunks:
-                break
-                
+        top_results = sorted(search_results['results'], 
+                           key=lambda x: x.get('relevance_score', 0), 
+                           reverse=True)[:max_chunks]
+        
+        for result in top_results:
             source_title = result.get('title', 'Unknown source')
             content_snippet = result.get('content_snippet', '')
             relevance_score = result.get('relevance_score', 0)
             
             chunk_text = f"[Source: {source_title} | Relevance: {relevance_score}]\n{content_snippet}"
-            
-            if total_chars + len(chunk_text) > max_chars:
-                remaining_chars = max_chars - total_chars
-                if remaining_chars > 100:
-                    chunk_text = chunk_text[:remaining_chars] + "..."
-                    context_parts.append(chunk_text)
-                break
-                
             context_parts.append(chunk_text)
-            total_chars += len(chunk_text)
         
         return "\n\n".join(context_parts)
     
