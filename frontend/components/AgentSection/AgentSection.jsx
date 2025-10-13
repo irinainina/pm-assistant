@@ -67,6 +67,7 @@ export default function AgentSection() {
     if (!trimmed) return;
 
     setIsLoading(true);
+    setInput("");
 
     const userMessage = { role: "user", content: trimmed, text: trimmed };
     const updatedMessages = [...messages, userMessage];
@@ -166,6 +167,7 @@ export default function AgentSection() {
       };
       saveHistory([...updatedMessages, errorMessage]);
       setIsLoading(false);
+      setInput(trimmed);
     }
   };
 
@@ -179,6 +181,7 @@ export default function AgentSection() {
   const handleNewChat = () => {
     setMessages([]);
     localStorage.removeItem(storageKey);
+    setInput("");
   };
 
   useEffect(() => {

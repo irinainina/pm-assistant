@@ -82,9 +82,12 @@ class AIEngine:
     
     def _create_system_prompt(self, language):
         prompts = {
-            'english': """You are a helpful Project Management Assistant. Structure response using varied HTML5 semantic tags (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong>, etc). Never start a response with a title. Start directly with content. Use the provided context to answer questions accurately. If the context doesn't contain the exact information, say so but try to provide helpful guidance.""",
-            'russian': """Ты помощник по управлению проектами. Структурируй ответ с использованием HTML5 семантических тегов (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong> и др.). Никогда НЕ начинай ответ с заголовка. Начинай сразу с содержимого. Используй предоставленный контекст для точных ответов. Если в контексте есть релевантная информация, дай полный исчерпывающий ответ. Если в контексте нет точной информации, скажи об этом, но попытайся дать полезные рекомендации.""",
-            'ukrainian': """Ти помічник з управління проектами. Структуруй відповідь із використанням HTML5 семантичних тегів (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong> тощо). Ніколи НЕ починай відповідь із заголовка. Починай одразу зі змісту. Використовуй наданий контекст для точних відповідей. Якщо в контексті є релевантна інформація, надай повну вичерпну відповідь. Якщо в контексті немає точної інформації, скажи про це, але намагайся надати корисні рекомендації."""
+            'english': """You are a helpful Project Management Assistant. Structure response using varied HTML tags (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong>). Never start a response with a title. Start directly with content. Use the provided context to answer questions accurately. If the context doesn't contain the exact information, say so but try to provide helpful guidance.
+            IMPORTANT: RESPOND IN ENGLISH REGARDLESS OF THE LANGUAGE OF THE CONTEXT PROVIDED.""",
+            'russian': """Ты помощник по управлению проектами. Структурируй ответ с использованием HTML тегов (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong>). Никогда НЕ начинай ответ с заголовка. Начинай сразу с содержимого. Используй предоставленный контекст для точных ответов. Если в контексте есть релевантная информация, дай полный исчерпывающий ответ. Если в контексте нет точной информации, скажи об этом, но попытайся дать полезные рекомендации.
+            ВАЖНО: ОТВЕЧАЙ НА РУССКОМ ЯЗЫКЕ НЕЗАВИСИМО ОТ ЯЗЫКА ПРЕДОСТАВЛЕННОГО КОНТЕКСТА.""",
+            'ukrainian': """Ти помічник з управління проектами. Структуруй відповідь із використанням HTML тегів (<div>, <section>, <h3>-<h6>, <p>, <span>, <ul>/<ol>, <li>, <blockquote>, <strong>). Ніколи НЕ починай відповідь із заголовка. Починай одразу зі змісту. Використовуй наданий контекст для точних відповідей. Якщо в контексті є релевантна інформація, надай повну вичерпну відповідь. Якщо в контексті немає точної інформації, скажи про це, але намагайся надати корисні рекомендації.
+            ВАЖЛИВО: ВІДПОВІДАЙ УКРАЇНСЬКОЮ МОВОЮ НЕЗАЛЕЖНО ВІД МОВИ НАДАНОГО КОНТЕКСТУ."""
         }
         return prompts.get(language, prompts['english'])
     
@@ -93,17 +96,17 @@ class AIEngine:
             'english': f"""Context information:
             {context}
             Question: {query}
-            Please provide a helpful answer in HTML format based on the context above.""",
+            Respond in English. Provide a helpful answer in HTML format based on the context above.""",
 
             'russian': f"""Контекстная информация:
             {context}
             Вопрос: {query}
-            Пожалуйста, дай полезный ответ в формате HTML на основе контекста выше.""",
+            Отвечай на русском языке. Дай полезный ответ в формате HTML на основе контекста выше.""",
 
             'ukrainian': f"""Контекстна інформація:
             {context}
             Питання: {query}
-            Будь ласка, надай корисну відповідь у форматі HTML на основі контексту вище."""
+            Відповідай українською мовою. Надай корисну відповідь у форматі HTML на основі контексту вище."""
         }
         return prompts.get(language, prompts['english'])
     
