@@ -266,21 +266,16 @@ class ChromaClient:
         
     def get_collection_stats(self) -> dict:
         try:
-            count = self.collection.count()
-            return {"total_chunks": count}
-        except Exception as e:
-            print("Stats error:", e)
+            collection_info = self.collection.count()
+            return {
+                "total_chunks": collection_info.get("count", 0)
+            }
+        except Exception:
             return {"total_chunks": 0}
 
     def clear_collection(self) -> bool:
         try:
-            self.client.delete_collection("pm_documents")
-            self.collection = self.client.get_or_create_collection(
-                name="pm_documents",
-                metadata={"hnsw:space": "cosine"}
-            )
+            self.collection.delete()
             return True
-        except Exception as e:
-            print("Clear error:", e)
+        except Exception:
             return False
-
