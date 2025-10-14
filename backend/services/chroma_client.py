@@ -266,9 +266,9 @@ class ChromaClient:
         
     def get_collection_stats(self) -> dict:
         try:
-            collection_info = self.collection.count()
+            total_chunks = self.collection.count()
             return {
-                "total_chunks": collection_info.get("count", 0)
+                "total_chunks": total_chunks
             }
         except Exception:
             return {"total_chunks": 0}
@@ -277,5 +277,45 @@ class ChromaClient:
         try:
             self.collection.delete()
             return True
+        except Exception:
+            return False
+        
+   
+    def get_all_documents_metadata(self) -> List[Dict]:
+        try:
+            results = self.collection.get(include=['metadatas'], limit=10000)
+            documents = []
+            seen_page_ids = set()
+            
+            for metadata in results['metadatas']:
+                source_id = metadata.get('source_id')
+                if source_id and source_id not in seen_page_ids:
+                    doc = {
+                        'page_id': source_id,
+                        'url': metadata.get('source_url', ''),
+                        'title': metadata.get('title', ''),
+                        'content': metadata.get('full_content', ''),
+                        'chunk_type': metadata.get('chunk_type', ''),
+                        'language': metadata.get('language', 'unknown')
+                    }
+                    documents.append(doc)
+                    seen_page_ids.add(source_id)
+            
+            return documents
+        except Exception:
+            return []
+
+    def delete_document(self, page_id: str) -> bool:
+        try:
+            results = self.collection.get(
+                where={"source_id": page_id},
+                include=[],
+                limit=10000
+            )
+            
+            if results['ids']:
+                self.collection.delete(ids=results['ids'])
+                return True
+            return False
         except Exception:
             return False
