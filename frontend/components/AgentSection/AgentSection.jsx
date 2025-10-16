@@ -231,42 +231,41 @@ export default function AgentSection() {
       <div className={styles.chatWrapper}>
         <div ref={chatRef} className={messages.length > 0 ? styles.chat : ""}>
           {messages.map((msg, idx) => (
-              <div key={idx} className={styles[msg.role]}>
-                <strong>{msg.role === "user" ? "You: " : msg.role === "agent" ? "AI: " : "Error: "}</strong>
-                {msg.role === "user" || msg.role === "error" ? (
-                  msg.text
-                ) : (
-                  <>
-                    <div className={styles.agentContent} dangerouslySetInnerHTML={{ __html: msg.text }} />
-                    {msg.sources && msg.sources.length > 0 && (
-                      <>
-                        <h3 className={styles.sourcesTitle}>Sources:</h3>
-                        <ul className={styles.sources}>
-                          {msg.sources.map((src, i) => (
-                            <li
-                              key={i}
-                              className={
-                                src.score >= 0.75
-                                  ? styles.highScore
-                                  : src.score >= 0.45
-                                  ? styles.mediumScore
-                                  : styles.lowScore
-                              }
-                            >
-                              <a href={src.url} target="_blank" rel="noopener noreferrer">
-                                {src.title}
-                              </a>{" "}
-                              - {src.score}
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            ))
-          }
+            <div key={idx} className={styles[msg.role]}>
+              <strong>{msg.role === "user" ? "You: " : msg.role === "agent" ? "AI: " : "Error: "}</strong>
+              {msg.role === "user" || msg.role === "error" ? (
+                msg.text
+              ) : (
+                <>
+                  <div className={styles.agentContent} dangerouslySetInnerHTML={{ __html: msg.text }} />
+                  {msg.sources && msg.sources.length > 0 && (
+                    <>
+                      <h3 className={styles.sourcesTitle}>Sources:</h3>
+                      <ul className={styles.sources}>
+                        {msg.sources.map((src, i) => (
+                          <li
+                            key={i}
+                            className={
+                              src.score >= 0.75
+                                ? styles.highScore
+                                : src.score >= 0.45
+                                ? styles.mediumScore
+                                : styles.lowScore
+                            }
+                          >
+                            <a href={src.url} target="_blank" rel="noopener noreferrer">
+                              {src.title}
+                            </a>{" "}
+                            - {src.score}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
