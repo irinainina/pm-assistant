@@ -5,6 +5,8 @@ from services.embeddings import EmbeddingService
 from typing import List, Dict, Set
 import tiktoken
 import datetime
+import os
+import json
 
 class ChromaClient:
     def __init__(self):
@@ -15,10 +17,34 @@ class ChromaClient:
         )
         self.embedding_service = EmbeddingService()
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        self._last_update_time = None
+        self.metadata_file = "./data/chroma/metadata.json"
+        self._last_update_time = self._load_last_update_time()
+
+    def _load_last_update_time(self):
+        try:
+            if os.path.exists(self.metadata_file):
+                with open(self.metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    return metadata.get('last_update_time')
+        except Exception:
+            pass
+        return None
+
+    def _save_last_update_time(self, timestamp):
+        try:
+            os.makedirs(os.path.dirname(self.metadata_file), exist_ok=True)
+            metadata = {
+                'last_update_time': timestamp
+            }
+            with open(self.metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Error saving update time: {e}")
 
     def set_last_update_time(self):
-        self._last_update_time = datetime.datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.datetime.utcnow().isoformat() + "Z"
+        self._last_update_time = timestamp
+        self._save_last_update_time(timestamp)
 
     def get_last_update_time(self):
         return self._last_update_time

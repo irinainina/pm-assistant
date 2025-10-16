@@ -51,11 +51,14 @@ def get_notion_status():
                     notion_last_edited.replace('Z', '+00:00')
                 ).timestamp()
                 
-                chroma_ts = datetime.datetime.fromisoformat(
-                    chroma_last_update.replace('Z', '+00:00')
-                ).timestamp() if chroma_last_update else 0
-
-                is_actual = (chroma_ts - notion_ts) >= -300
+                if not chroma_last_update:
+                    is_actual = False
+                    chroma_ts = 0
+                else:
+                    chroma_ts = datetime.datetime.fromisoformat(
+                        chroma_last_update.replace('Z', '+00:00')
+                    ).timestamp()
+                    is_actual = chroma_ts >= notion_ts
                 
                 chroma_stats = chroma_client.get_collection_stats()
                 
