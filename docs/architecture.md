@@ -16,10 +16,27 @@
 ```
 Frontend (Next.js 15)
 /frontend
-├── app
-    └── page.js             # главная страница 
-├── components
-    └── AgentSection.jsx    # компонент чата
+├── app/
+│   ├── api/
+│   │   └── auth/
+│   │       └── [...nextauth]/
+│   │           └── route.js              # NextAuth API route
+│   ├── providers.jsx                     # SessionProvider
+│   ├── layout.js                         # корневой layout
+│   └── page.js                           # главная страница 
+├── components/
+│   ├── AgentSection/
+│   │   └── AgentSection.jsx              # компонент чата
+│   └── Auth/
+│       └── Auth.jsx                      # компонент аутентификации
+├── lib/
+│   ├── auth.js                           # конфигурация NextAuth
+│   └── prisma.js                         # инициализация Prisma Client
+├── prisma/
+│   └── schema.prisma                     # схема базы данных
+├── auth.config.js                        # конфиг провайдеров NextAuth
+├── .env.local                            # переменные окружения Next.js
+└── .env                                  # переменные для Prisma
 
 
 Backend (Python + Flask)
@@ -49,5 +66,10 @@ Backend (Python + Flask)
   ├── architecture.md       # архитектура
   ├── api.md                # описание эндпойнтов
   └── plan.md               # план работы над проектом
+
+База данных (Supabase PostgreSQL)
+- Таблица: users (id, email, name, image, created_at, emailVerified)
+- Таблица: accounts (OAuth аккаунты Google)
+- Таблица: sessions (сессии пользователей)
 
 ```

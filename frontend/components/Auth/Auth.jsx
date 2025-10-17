@@ -1,6 +1,7 @@
 "use client";
 
 import { signIn, signOut, useSession } from "next-auth/react";
+import Image from "next/image";
 import styles from "./Auth.module.css";
 
 export default function Auth() {
@@ -10,13 +11,15 @@ export default function Auth() {
     <div className={styles.container}>
       {!session ? (
         <>
-          <p className={styles.text}>Вы не вошли</p>
           <button className={styles.button} onClick={() => signIn("google")}>
-            Sign in with Google
+            Sign in
           </button>
         </>
       ) : (
         <>
+          {session.user?.image && (
+            <Image src={session.user.image} alt="User avatar" width={40} height={40} className={styles.avatar} />
+          )}
           <p className={styles.text}>Hello, {session.user?.name}</p>
           <button className={styles.button} onClick={() => signOut()}>
             Sign out
