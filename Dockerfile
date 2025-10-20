@@ -16,6 +16,18 @@ WORKDIR /usr/src/app
 COPY ./backend/requirements.txt /usr/src/app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /usr/src/app/requirements.txt
 
+# Скачаем модель sentence-transformer заранее (это займет ~500MB)
+# Устанавливаем переменные окружения для кеширования
+ENV HF_HOME=/usr/src/app/.cache
+ENV SENTENCE_TRANSFORMERS_HOME=/usr/src/app/.cache
+ENV HF_HUB_DISABLE_TELEMETRY=1
+
+# Загружаем модель
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+    print('Downloading sentence-transformer model...'); \
+    model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); \
+    print('Model downloaded successfully to cache')"
+
 # Скопируем весь бэкенд
 COPY ./backend /usr/src/app
 
