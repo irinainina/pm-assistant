@@ -4,17 +4,46 @@ import re
 import emoji
 import tiktoken
 from typing import List, Dict
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EmbeddingService:
     _model = None
 
     def __init__(self):
         if EmbeddingService._model is None:
-            EmbeddingService._model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            try:
+                # Set timeout and retry settings
+                os.environ['HF_HUB_DOWNLOAD_TIMEOUT'] = '60'  # 60 seconds timeout
+                os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'  # Disable telemetry
+
+                # Try to load model with fallback to OpenAI if specified
+                use_openai_fallback = os.environ.get('USE_OPENAI_EMBEDDINGS', 'false').lower() == 'true'
+
+                if use_openai_fallback:
+                    logger.info("Using OpenAI embeddings as fallback")
+                    EmbeddingService._model = 'openai'  # Flag to use OpenAI
+                else:
+                    logger.info("Loading sentence-transformer model...")
+                    EmbeddingService._model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+                    logger.info("Model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load embedding model: {e}")
+                logger.warning("Running without embeddings - search functionality will be limited")
+                EmbeddingService._model = None
+
         self.model = EmbeddingService._model
-        self.language_detector = LanguageDetectorBuilder.from_languages(
-            Language.ENGLISH, Language.RUSSIAN, Language.UKRAINIAN
-        ).build()
+
+        try:
+            self.language_detector = LanguageDetectorBuilder.from_languages(
+                Language.ENGLISH, Language.RUSSIAN, Language.UKRAINIAN
+            ).build()
+        except:
+            logger.warning("Language detector initialization failed")
+            self.language_detector = None
+
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
     def _clean_text(self, text: str) -> str:
@@ -42,12 +71,21 @@ class EmbeddingService:
         return chunks
 
     def generate_hybrid_embeddings(self, pages: List[Dict]) -> List[Dict]:
+        if not self.model:
+            logger.warning("Embeddings model not available, returning empty embeddings")
+            return []
+
+        if self.model == 'openai':
+            # TODO: Implement OpenAI embeddings if needed
+            logger.warning("OpenAI embeddings not yet implemented")
+            return []
+
         all_embeddings = []
-        
+
         for page in pages:
             if not page.get('id') or not page.get('content'):
                 continue
-                
+
             title = page['properties'].get('title', '')
             url = page['url']
             content = page['content']
@@ -55,14 +93,14 @@ class EmbeddingService:
 
             clean_title = self._clean_text(title)
             clean_content = self._clean_text(content)
-            
+
             if not clean_title and not clean_content:
                 continue
 
             if clean_title:
                 title_embedding = self.model.encode(
-                    clean_title, 
-                    show_progress_bar=False, 
+                    clean_title,
+                    show_progress_bar=False,
                     convert_to_tensor=False
                 ).tolist()
                 
@@ -106,6 +144,15 @@ class EmbeddingService:
             return 'unknown'
 
     def generate_embeddings(self, texts, batch_size: int = 32):
+        if not self.model:
+            logger.warning("Embeddings model not available")
+            return []
+
+        if self.model == 'openai':
+            # TODO: Implement OpenAI embeddings if needed
+            logger.warning("OpenAI embeddings not yet implemented")
+            return []
+
         if not texts:
             return []
         if isinstance(texts, str):
@@ -113,7 +160,7 @@ class EmbeddingService:
         texts = [self._clean_text(t) for t in texts if t and isinstance(t, str)]
         if not texts:
             return []
-        
+
         embeddings = []
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
