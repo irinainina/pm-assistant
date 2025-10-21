@@ -146,4 +146,58 @@ class AIEngine:
                     
         except Exception as e:
             yield f"Sorry, I encountered an error: {str(e)}"
-    
+
+    async def normalize_query(self, original_query: str) -> str:
+        language = await self._detect_language_async(original_query)
+        normalization_prompt = self._create_normalization_prompt(language)
+        
+        full_prompt = f"{normalization_prompt}\n\nЗапрос: \"{original_query}\"\n\nНормализованный запрос:"
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": full_prompt}],
+                temperature=0.1,
+                max_tokens=200
+            )
+            
+            normalized = response.choices[0].message.content.strip()
+            return normalized if normalized else original_query
+            
+        except Exception as e:
+            return original_query
+
+    def _create_normalization_prompt(self, language):
+        prompts = {
+            'english': """Normalize this query to formal business style of project documentation.
+
+    CRITICAL RULES:
+    1. Keep the original language of the query (English)
+    2. Correct spelling errors and typos
+    3. Replace slang and colloquial expressions with standard project management terms
+    4. Correct transliteration (e.g., "prajs" → "price")
+    5. Do not add extra words or explanations - only the normalized query
+    6. Do not change the meaning and essence of the original query""",
+
+            'russian': """Нормализуй этот запрос к формальному деловому стилю проектной документации.
+
+    КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
+    1. Сохрани оригинальный язык запроса (русский)
+    2. Исправь орфографические ошибки и опечатки
+    3. Замени сленг и разговорные выражения на стандартные термины проектного менеджмента
+    4. Исправляй транслитерацию (например, "прайс" → "цена")
+    5. Не добавляй дополнительные слова или объяснения - только нормализованный запрос
+    6. Не меняй смысл и суть исходного запроса""",
+
+            'ukrainian': """Нормалізуй цей запит до формального ділового стилю проектної документації.
+
+    КРИТИЧНО ВАЖЛИВІ ПРАВИЛА:
+    1. Збережи оригінальну мову запиту (українську)
+    2. Виправ орфографічні помилки та описки
+    3. Заміни сленг та розмовні вирази на стандартні терміни проектного менеджменту
+    4. Виправляй транслітерацію (наприклад, "прайс" → "ціна")
+    5. Не додавай додаткові слова чи пояснення - тільки нормалізований запит
+    6. Не змінюй сенс та суть початкового запиту"""
+        }
+        return prompts.get(language, prompts['english'])
+        

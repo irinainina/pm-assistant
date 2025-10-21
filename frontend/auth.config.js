@@ -7,6 +7,7 @@ export default {
   session: {
     strategy: "jwt",
   },
+  secret: process.env.AUTH_SECRET,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
