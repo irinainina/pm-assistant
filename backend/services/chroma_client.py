@@ -170,6 +170,16 @@ class ChromaClient:
                 query,
                 f"{query} (у назві або темі статті)"
             ])
+
+            # Check if embeddings are available
+            if not query_embeddings or len(query_embeddings) < 2:
+                return {
+                    'success': False,
+                    'error': 'Embedding service is not available. The application is running in limited mode.',
+                    'results': [],
+                    'titles': []
+                }
+
             semantic_results = self.collection.query(
                 query_embeddings=[query_embeddings[0]],
                 n_results=min(n_results * 5, 100),
