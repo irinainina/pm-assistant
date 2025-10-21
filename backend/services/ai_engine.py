@@ -167,6 +167,30 @@ class AIEngine:
         except Exception as e:
             return original_query
 
+    async def normalize_query(self, original_query: str) -> str:
+        language = await self._detect_language_async(original_query)
+        normalization_prompt = self._create_normalization_prompt(language)
+        
+        full_prompt = f"{normalization_prompt}\n\nЗапрос: \"{original_query}\"\n\nНормализованный запрос:"
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": full_prompt}],
+                temperature=0.1,
+                max_tokens=200
+            )
+            
+            normalized = response.choices[0].message.content.strip()
+  
+            if normalized.startswith('"') and normalized.endswith('"'):
+                normalized = normalized[1:-1].strip()
+                
+            return normalized if normalized else original_query
+                
+        except Exception as e:
+            return original_query
+
     def _create_normalization_prompt(self, language):
         prompts = {
             'english': """Normalize this query to formal business style of project documentation.

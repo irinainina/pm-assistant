@@ -5,7 +5,6 @@ from services.ai_engine import AIEngine
 from routes.ask import ask_blueprint
 from routes.notion import notion_blueprint
 from routes.health import health_blueprint
-import asyncio
 import os
 
 app = Flask(__name__)
@@ -31,15 +30,6 @@ if os.environ.get('FLASK_ENV') == 'development':
     app.register_blueprint(notion_parsed_blueprint, url_prefix='/api')
     app.register_blueprint(embeddings_blueprint, url_prefix='/api')
 
-def run_async(async_func):
-    """Run async function in sync context - NEEDED for async routes"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(async_func)
-    finally:
-        loop.close()
-        
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, threaded=True)
+    app.run(host='0.0.0.0', port=port, threaded=False)
