@@ -1,13 +1,19 @@
 .container {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
-  padding: 16px;  
-  max-width: 1440px;
+  padding: 16px;
   width: 100%;
   margin: 0 auto;
   padding-right: 40px;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .text {
@@ -23,20 +29,19 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: #2563eb;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 0;
+  font-size: 1rem;
   font-weight: 500;
-  font-size: 16px;
+  background-color: #8B8B8B;
   color: #fff;
   cursor: pointer;
-  transition: .3s;
+  transition: 0.3s ease;
 }
 
 .button:hover {
-  background: #1d4ed8; /* blue-700 */
-  border-color: #1d4ed8;
+  background-color: #666; 
 }
 
 .avatar {

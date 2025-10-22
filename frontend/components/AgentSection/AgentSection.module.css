@@ -4,7 +4,7 @@
   padding: 40px;
   margin-bottom: 40px;
   width: 100%;
-  max-width: 1440px;
+  max-width: 1200px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
   border: 1px solid #e5e7eb;
 }
@@ -102,7 +102,7 @@
   cursor: pointer;
   font-size: 1rem;
   font-weight: 500;
-  transition: background-color 0.2s ease;
+  transition: 0.3s ease;
 }
 
 .button:hover {

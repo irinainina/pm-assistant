@@ -17,10 +17,12 @@ export default function Auth() {
         </>
       ) : (
         <>
-          {session.user?.image && (
-            <Image src={session.user.image} alt="User avatar" width={40} height={40} className={styles.avatar} />
-          )}
-          <p className={styles.text}>Hello, {session.user?.name}</p>
+          <div className={styles.user}>
+            {session.user?.image && (
+              <Image src={session.user.image} alt="User avatar" width={40} height={40} className={styles.avatar} />
+            )}
+            <p className={styles.text}>Hello, {session.user?.name}</p>
+          </div>
           <button className={styles.button} onClick={() => signOut()}>
             Sign out
           </button>
