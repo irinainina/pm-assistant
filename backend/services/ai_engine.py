@@ -201,7 +201,9 @@ class AIEngine:
     3. Replace slang and colloquial expressions with standard project management terms
     4. Correct transliteration (e.g., "prajs" → "price")
     5. Do not add extra words or explanations - only the normalized query
-    6. Do not change the meaning and essence of the original query""",
+    6. Do not change the meaning and essence of the original query
+    7. FOR COMMON TERMS: add popular variants in parentheses (e.g., "retrospective (retro)", "demo (demonstration)", "fixed price (fix price)")
+    8. Remove any quotes from the final result""",
 
             'russian': """Нормализуй этот запрос к формальному деловому стилю проектной документации.
 
@@ -211,7 +213,9 @@ class AIEngine:
     3. Замени сленг и разговорные выражения на стандартные термины проектного менеджмента
     4. Исправляй транслитерацию (например, "прайс" → "цена")
     5. Не добавляй дополнительные слова или объяснения - только нормализованный запрос
-    6. Не меняй смысл и суть исходного запроса""",
+    6. Не меняй смысл и суть исходного запроса
+    7. ДЛЯ РАСПРОСТРАНЕННЫХ ТЕРМИНОВ: добавь популярные варианты в скобках на русском и английском (например, "ретроспектива (ретро retrospective)", "фиксированная цена (фикс прайс fixed price)", "демонстрация (демо demo)")
+    8. Убери кавычки из конечного результата""",
 
             'ukrainian': """Нормалізуй цей запит до формального ділового стилю проектної документації.
 
@@ -221,7 +225,9 @@ class AIEngine:
     3. Заміни сленг та розмовні вирази на стандартні терміни проектного менеджменту
     4. Виправляй транслітерацію (наприклад, "прайс" → "ціна")
     5. Не додавай додаткові слова чи пояснення - тільки нормалізований запит
-    6. Не змінюй сенс та суть початкового запиту"""
+    6. Не змінюй сенс та суть початкового запиту
+    7. ДЛЯ ПОШИРЕНИХ ТЕРМІНІВ: додай популярні варіанти в дужках українською та англійською (наприклад, "ретроспектива (ретро retrospective)", "фіксована ціна (фікс прайс fixed price)", "демонстрація (демо demo)")
+    8. Прибери лапки з кінцевого результату"""
         }
         return prompts.get(language, prompts['english'])
         
