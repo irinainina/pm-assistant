@@ -18,12 +18,10 @@ export default function AgentSection({ currentConversationId, onConversationChan
   const chatRef = useRef(null);
   const storageKey = "agent_history";
 
-  // Загружаем сообщения при смене диалога
   useEffect(() => {
     if (currentConversationId) {
       loadConversation(currentConversationId);
     } else {
-      // Загружаем из localStorage для нового чата
       const savedHistory = localStorage.getItem(storageKey);
       if (savedHistory) setMessages(JSON.parse(savedHistory));
     }
@@ -42,7 +40,6 @@ export default function AgentSection({ currentConversationId, onConversationChan
       if (response.ok) {
         const data = await response.json();
 
-        // Преобразуем сообщения в формат для AgentSection
         const formattedMessages = data.messages.map((msg) => {
           if (msg.role === "user") {
             return {
@@ -133,7 +130,7 @@ export default function AgentSection({ currentConversationId, onConversationChan
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "user-id": session?.user?.id || "",
+          "User-Id": session?.user?.id || "",
         },
         body: JSON.stringify({
           query: trimmed,

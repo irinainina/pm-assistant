@@ -1,25 +1,3 @@
-# FROM python:3.11-slim
-
-# ENV PYTHONDONTWRITEBYTECODE=1
-# ENV PYTHONUNBUFFERED=1
-# ENV PORT=8000
-
-# RUN apt-get update && \
-#     apt-get install -y build-essential gcc --no-install-recommends && \
-#     rm -rf /var/lib/apt/lists/*
-
-# WORKDIR /usr/src/app
-
-# COPY ./backend/requirements.txt /usr/src/app/requirements.txt
-# RUN pip install --upgrade pip && pip install -r /usr/src/app/requirements.txt
-
-# COPY ./backend /usr/src/app
-
-# EXPOSE 8000
-
-# CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "600", "--workers", "1", "main:app"]
-
-
 # Dockerfile
 FROM python:3.11-slim
 
@@ -57,3 +35,26 @@ EXPOSE 8000
 
 # Запуск через gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "600", "--workers", "1", "main:app"]
+
+
+# Dockerfile - без предзагрузки модели
+# FROM python:3.11-slim
+
+# ENV PYTHONDONTWRITEBYTECODE=1
+# ENV PYTHONUNBUFFERED=1
+# ENV PORT=8000
+
+# RUN apt-get update && \
+#     apt-get install -y build-essential gcc --no-install-recommends && \
+#     rm -rf /var/lib/apt/lists/*
+
+# WORKDIR /usr/src/app
+
+# COPY ./backend/requirements.txt /usr/src/app/requirements.txt
+# RUN pip install --upgrade pip && pip install -r /usr/src/app/requirements.txt
+
+# COPY ./backend /usr/src/app
+
+# EXPOSE 8000
+
+# CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "600", "--workers", "1", "main:app"]
