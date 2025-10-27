@@ -60,6 +60,20 @@ GET http://localhost:8000/api/health
 
 Проверка, что сервер работает. Возвращает простой ответ "ok".
 
+#### 5. Получение, добавление, удаление сообщений пользователя
+
+```
+GET /api/conversations
+
+GET /api/conversations/<id>/messages
+
+POST /api/conversations
+
+PUT /api/conversations/<id>/useful
+
+DELETE /api/conversations/<id>
+```
+
 ### Тестовые эндпоинты (для разработки и отладки)
 
 #### 5. Получение документов из Notion

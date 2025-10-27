@@ -3,10 +3,18 @@ from services.chroma_client import ChromaClient
 from services.ai_engine import AIEngine
 import asyncio
 import time
+import psycopg2
+import os
+from datetime import datetime
+import uuid
+import json
 
 chroma_client = ChromaClient()
 ai_engine = AIEngine()
 search_blueprint = Blueprint('search', __name__)
+
+def get_db_connection():
+    return psycopg2.connect(os.environ.get('DATABASE_URL'))
 
 def run_async(async_func):
     loop = asyncio.new_event_loop()
@@ -23,6 +31,8 @@ def search_question():
     try:
         query = request.args.get('query') or request.args.get('q')
         history = request.args.get('history', '')
+        user_id = "cmgtqz8b40000viwgjsqavitm"
+        conversation_id = request.args.get('conversation_id')
         
         if not query:
             return jsonify({'error': 'Query is required'}), 400
@@ -75,6 +85,8 @@ def search_question():
 
         total_time = int((time.time() - total_start_time) * 1000)
 
+        db_save_result = save_conversation_to_db(user_id, conversation_id, query, answer, sources)
+
         debug_info = {
             'ai_engine_input': {
                 'original_query': query,
@@ -102,7 +114,8 @@ def search_question():
             'ai_engine_output': {
                 'answer_length': len(answer),
                 'sources_count': len(sources)
-            }
+            },
+            'database_save': db_save_result
         }
         
         return jsonify({
@@ -127,36 +140,84 @@ def search_question():
             'error': str(e)
         }), 500
 
+def save_conversation_to_db(user_id, conversation_id, user_query, ai_response, sources):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+            title = user_query[:50] + "..." if len(user_query) > 50 else user_query
+            
+            cursor.execute("""
+                INSERT INTO conversations (id, user_id, title, last_activity_at, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (conversation_id, user_id, title, datetime.now(), datetime.now(), datetime.now()))
+            
+            conn.commit()
+        
+        user_message_id = str(uuid.uuid4())
+        ai_message_id = str(uuid.uuid4())
+        
+        cursor.execute("""
+            INSERT INTO messages (id, conversation_id, role, content, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_message_id, conversation_id, 'user', user_query, datetime.now()))
+        
+        cursor.execute("""
+            INSERT INTO messages (id, conversation_id, role, content, sources, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (ai_message_id, conversation_id, 'assistant', ai_response, json.dumps(sources), datetime.now()))
+        
+        cursor.execute("""
+            UPDATE conversations 
+            SET last_activity_at = %s, updated_at = %s
+            WHERE id = %s
+        """, (datetime.now(), datetime.now(), conversation_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {
+            'conversation_id': conversation_id,
+            'user_message_saved': True,
+            'ai_message_saved': True
+        }
+        
+    except Exception as e:
+        return {
+            'error': str(e),
+            'conversation_id': conversation_id,
+            'user_message_saved': False,
+            'ai_message_saved': False
+        }
 
 
 # from flask import Blueprint, request, jsonify
 # from services.chroma_client import ChromaClient
 # from services.ai_engine import AIEngine
 # import asyncio
-# import concurrent.futures
 # import time
+# import psycopg2
+# import os
+# from datetime import datetime
+# import uuid
 
 # chroma_client = ChromaClient()
 # ai_engine = AIEngine()
 # search_blueprint = Blueprint('search', __name__)
 
-# _thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+# def get_db_connection():
+#     return psycopg2.connect(os.environ.get('DATABASE_URL'))
 
 # def run_async(async_func):
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
 #     try:
-#         try:
-#             loop = asyncio.get_event_loop()
-#         except RuntimeError:
-#             loop = asyncio.new_event_loop()
-#             asyncio.set_event_loop(loop)
-        
-#         if loop.is_running():
-#             future = _thread_pool.submit(lambda: loop.run_until_complete(async_func))
-#             return future.result()
-#         else:
-#             return loop.run_until_complete(async_func)
-#     except Exception as e:
-#         raise Exception(f"Async execution failed: {str(e)}")
+#         return loop.run_until_complete(async_func)
+#     finally:
+#         loop.close()
 
 # @search_blueprint.route('/search', methods=['GET'])
 # def search_question():
@@ -165,6 +226,8 @@ def search_question():
 #     try:
 #         query = request.args.get('query') or request.args.get('q')
 #         history = request.args.get('history', '')
+#         user_id = "cmgtqz8b40000viwgjsqavitm"
+#         conversation_id = request.args.get('conversation_id')
         
 #         if not query:
 #             return jsonify({'error': 'Query is required'}), 400
@@ -217,6 +280,8 @@ def search_question():
 
 #         total_time = int((time.time() - total_start_time) * 1000)
 
+#         db_save_result = save_conversation_to_db(user_id, conversation_id, query, answer)
+
 #         debug_info = {
 #             'ai_engine_input': {
 #                 'original_query': query,
@@ -244,7 +309,8 @@ def search_question():
 #             'ai_engine_output': {
 #                 'answer_length': len(answer),
 #                 'sources_count': len(sources)
-#             }
+#             },
+#             'database_save': db_save_result
 #         }
         
 #         return jsonify({
@@ -268,4 +334,57 @@ def search_question():
 #         return jsonify({
 #             'error': str(e)
 #         }), 500
+
+# def save_conversation_to_db(user_id, conversation_id, user_query, ai_response):
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+        
+#         if not conversation_id:
+#             conversation_id = str(uuid.uuid4())
+#             title = user_query[:50] + "..." if len(user_query) > 50 else user_query
+            
+#             cursor.execute("""
+#                 INSERT INTO conversations (id, user_id, title, last_activity_at, created_at, updated_at)
+#                 VALUES (%s, %s, %s, %s, %s, %s)
+#             """, (conversation_id, user_id, title, datetime.now(), datetime.now(), datetime.now()))
+            
+#             conn.commit()
+        
+#         user_message_id = str(uuid.uuid4())
+#         ai_message_id = str(uuid.uuid4())
+        
+#         cursor.execute("""
+#             INSERT INTO messages (id, conversation_id, role, content, created_at)
+#             VALUES (%s, %s, %s, %s, %s)
+#         """, (user_message_id, conversation_id, 'user', user_query, datetime.now()))
+        
+#         cursor.execute("""
+#             INSERT INTO messages (id, conversation_id, role, content, created_at)
+#             VALUES (%s, %s, %s, %s, %s)
+#         """, (ai_message_id, conversation_id, 'assistant', ai_response, datetime.now()))
+        
+#         cursor.execute("""
+#             UPDATE conversations 
+#             SET last_activity_at = %s, updated_at = %s
+#             WHERE id = %s
+#         """, (datetime.now(), datetime.now(), conversation_id))
+        
+#         conn.commit()
+#         cursor.close()
+#         conn.close()
+        
+#         return {
+#             'conversation_id': conversation_id,
+#             'user_message_saved': True,
+#             'ai_message_saved': True
+#         }
+        
+#     except Exception as e:
+#         return {
+#             'error': str(e),
+#             'conversation_id': conversation_id,
+#             'user_message_saved': False,
+#             'ai_message_saved': False
+#         }
     

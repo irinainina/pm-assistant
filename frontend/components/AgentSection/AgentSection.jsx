@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import styles from "./AgentSection.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-export default function AgentSection() {
+export default function AgentSection({ currentConversationId, onConversationChange }) {
+  const { data: session } = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -16,14 +18,60 @@ export default function AgentSection() {
   const chatRef = useRef(null);
   const storageKey = "agent_history";
 
+  // Загружаем сообщения при смене диалога
   useEffect(() => {
-    const savedHistory = localStorage.getItem(storageKey);
-    if (savedHistory) setMessages(JSON.parse(savedHistory));
-  }, []);
+    if (currentConversationId) {
+      loadConversation(currentConversationId);
+    } else {
+      // Загружаем из localStorage для нового чата
+      const savedHistory = localStorage.getItem(storageKey);
+      if (savedHistory) setMessages(JSON.parse(savedHistory));
+    }
+  }, [currentConversationId]);
+
+  const loadConversation = async (conversationId) => {
+    if (!session?.user?.id) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/conversations/${conversationId}/messages`, {
+        headers: {
+          "User-Id": session.user.id,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Преобразуем сообщения в формат для AgentSection
+        const formattedMessages = data.messages.map((msg) => {
+          if (msg.role === "user") {
+            return {
+              role: "user",
+              content: msg.content,
+              text: msg.content,
+            };
+          } else {
+            return {
+              role: "agent",
+              content: msg.content,
+              text: msg.content,
+              sources: msg.sources || [],
+            };
+          }
+        });
+
+        setMessages(formattedMessages);
+      }
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+    }
+  };
 
   const saveHistory = (newMessages) => {
     setMessages(newMessages);
-    localStorage.setItem(storageKey, JSON.stringify(newMessages));
+    if (!currentConversationId) {
+      localStorage.setItem(storageKey, JSON.stringify(newMessages));
+    }
   };
 
   const checkDbStatus = async () => {
@@ -83,10 +131,14 @@ export default function AgentSection() {
 
       const res = await fetch(`${apiUrl}/api/ask-stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": session?.user?.id || "",
+        },
         body: JSON.stringify({
           query: trimmed,
           history: conversationHistory,
+          conversation_id: currentConversationId,
         }),
       });
 
@@ -149,6 +201,7 @@ export default function AgentSection() {
                   sources: data.sources || [],
                   isStreaming: false,
                 };
+
                 saveHistory([...updatedMessages, finalMessage]);
                 setIsLoading(false);
                 return;
@@ -180,6 +233,7 @@ export default function AgentSection() {
 
   const handleNewChat = () => {
     setMessages([]);
+    onConversationChange(null);
     localStorage.removeItem(storageKey);
     setInput("");
   };

@@ -1,0 +1,65 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;  
+  flex: 1;
+  width: 300px;
+  background: #f8f9fa;
+  border-radius: 24px;
+  border: 1px solid #e5e7eb;  
+}
+
+.sidebar.closed {
+  display: none;
+}
+
+.sidebar.open {
+  display: flex;
+}
+
+.header {
+  padding: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.conversationList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.loading, .empty {
+  padding: 1rem;
+  text-align: center;
+  color: #6c757d;
+}
+
+.conversationItem {
+  padding: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.conversationItem:hover {
+  background: #e9ecef;
+}
+
+.conversationItem.active {
+  background: #8B8B8B;
+  color: white;
+}
+
+.conversationItem.active:hover {
+  background: #666;
+}
+
+.conversationTitle {
+  font-weight: 500;
+}

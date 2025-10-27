@@ -17,6 +17,7 @@ model User {
   
   accounts      Account[]
   sessions      Session[]
+  conversations Conversation[]
 
   @@map("users")
 }
@@ -49,4 +50,36 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
+}
+
+model Conversation {
+  id               String   @id @default(cuid())
+  user_id          String   @map("user_id")
+  title            String
+  is_useful        Boolean  @default(false)
+  last_activity_at DateTime @default(now())
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  user    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@map("conversations")
+  @@index([user_id, last_activity_at], name: "conversations_user_id_last_activity_at_idx")
+  @@index([user_id, is_useful], name: "conversations_user_id_is_useful_idx")
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversation_id String   @map("conversation_id")
+  role            String
+  content         String   @db.Text
+  sources         Json?
+  created_at      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([conversation_id, created_at], name: "messages_conversation_id_created_at_idx")
+  @@index([conversation_id], name: "messages_conversation_id_idx")
 }
