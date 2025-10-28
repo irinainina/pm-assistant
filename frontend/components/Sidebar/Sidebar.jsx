@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import styles from "./Sidebar.module.css";
 
@@ -11,6 +11,11 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   const [conversations, setConversations] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
+  const [modalPosition, setModalPosition] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [previousTitle, setPreviousTitle] = useState("");
+  const editableRef = useRef(null);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -23,11 +28,8 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
 
     try {
       const response = await fetch(`${apiUrl}/api/conversations`, {
-        headers: {
-          "User-Id": session.user.id,
-        },
+        headers: { "User-Id": session.user.id },
       });
-
       if (response.ok) {
         const data = await response.json();
         setConversations(data);
@@ -38,8 +40,17 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   };
 
   const handleMenuClick = (conversation, event) => {
-    event.stopPropagation(); // Предотвращаем всплытие события к родительскому div
+    event.stopPropagation();
+    if (modalOpen && selectedConversation?.id === conversation.id) {
+      handleModalClose();
+      return;
+    }
     setSelectedConversation(conversation);
+    const rect = event.currentTarget.getBoundingClientRect();
+    setModalPosition({
+      top: rect.top - 56,
+      left: rect.right - 80,
+    });
     setModalOpen(true);
   };
 
@@ -48,31 +59,156 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
     setSelectedConversation(null);
   };
 
+  const handleStartEditing = (conversation, e) => {
+    e.stopPropagation();
+    setEditingId(conversation.id);
+    setEditedTitle(conversation.title);
+    setPreviousTitle(conversation.title);
+    setModalOpen(false);
+  };
+
+  const handleFinishEditing = async () => {
+    const newTitle = editedTitle.trim();
+    if (!editingId) return;
+
+    if (newTitle && newTitle !== previousTitle) {
+      try {
+        const response = await fetch(`${apiUrl}/api/conversations/${editingId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Id": session.user.id,
+          },
+          body: JSON.stringify({ title: newTitle }),
+        });
+
+        if (response.ok) {
+          const updated = await response.json();
+          setConversations((prev) =>
+            prev.map((conv) => (conv.id === updated.id ? { ...conv, title: updated.title } : conv))
+          );
+        } else {
+          setConversations((prev) =>
+            prev.map((conv) => (conv.id === editingId ? { ...conv, title: previousTitle } : conv))
+          );
+        }
+      } catch (error) {
+        console.error("Error renaming conversation:", error);
+      }
+    } else {
+      // если пусто или без изменений — возвращаем старое
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === editingId ? { ...conv, title: previousTitle } : conv))
+      );
+    }
+
+    setEditingId(null);
+    setEditedTitle("");
+    setPreviousTitle("");
+  };
+
+  const handleToggleUseful = async () => {
+    if (!selectedConversation) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/conversations/${selectedConversation.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Id": session.user.id,
+        },
+        body: JSON.stringify({ is_useful: !selectedConversation.is_useful }),
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        setConversations((prev) =>
+          prev.map((conv) => (conv.id === updated.id ? { ...conv, is_useful: updated.is_useful } : conv))
+        );
+        handleModalClose();
+      }
+    } catch (error) {
+      console.error("Error toggling useful:", error);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedConversation) return;
+
+    if (!confirm("Are you sure you want to delete this conversation?")) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/conversations/${selectedConversation.id}`, {
+        method: "DELETE",
+        headers: { "User-Id": session.user.id },
+      });
+
+      if (response.ok) {
+        setConversations((prev) => prev.filter((c) => c.id !== selectedConversation.id));
+        if (currentConversationId === selectedConversation.id) {
+          onSelectConversation(null);
+        }
+        handleModalClose();
+      }
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+    }
+  };
+
+  const handleShare = () => {
+    if (!selectedConversation) return;
+    const shareUrl = `${window.location.origin}/chat/${selectedConversation.id}`;
+    navigator.clipboard
+      .writeText(shareUrl)
+      .then(() => alert("Conversation link copied to clipboard!"))
+      .catch(() => alert(`Share this link: ${shareUrl}`));
+    handleModalClose();
+  };
+
   const handleModalAction = (action) => {
-    console.log(`Action: ${action} for conversation:`, selectedConversation);
-    // Здесь будет логика для каждой кнопки
     switch (action) {
       case "rename":
-        // Логика переименования
+        handleStartEditing(selectedConversation, new Event("click"));
         break;
       case "useful":
-        // Логика пометки как полезное
+        handleToggleUseful();
         break;
       case "share":
-        // Логика поделиться
+        handleShare();
         break;
       case "delete":
-        // Логика удаления
+        handleDelete();
         break;
       default:
         break;
     }
-    handleModalClose();
   };
 
-  if (!session) {
-    return null;
-  }
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const handleClickOutside = (e) => {
+      const modal = document.querySelector(`.${styles.modal}`);
+      if (modal && !modal.contains(e.target)) handleModalClose();
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [modalOpen]);
+
+  if (!session) return null;
+
+  useEffect(() => {
+    if (editableRef.current && editingId) {
+      editableRef.current.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editableRef.current);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, [editingId]);
 
   return (
     <>
@@ -93,13 +229,41 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
             conversations.map((conversation) => (
               <div
                 key={conversation.id}
-                className={`${styles.conversationItem} ${
-                  currentConversationId === conversation.id ? styles.active : ""
-                }`}
+                className={`${styles.conversationItem} 
+                ${currentConversationId === conversation.id ? styles.active : ""} 
+                ${conversation.is_useful ? styles.useful : ""} 
+                ${selectedConversation?.id === conversation.id && modalOpen ? styles.hover : ""}`}
                 onClick={() => onSelectConversation(conversation.id)}
               >
                 <div className={styles.conversationContent}>
-                  <div className={styles.conversationTitle}>{conversation.title}</div>
+                  {editingId === conversation.id ? (
+                    <input
+                      ref={editableRef}
+                      type="text"
+                      className={styles.editableInput}
+                      value={editedTitle}
+                      autoFocus
+                      onBlur={handleFinishEditing}
+                      onChange={(e) => setEditedTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleFinishEditing();
+                        }
+                        if (e.key === "Escape") {
+                          setEditingId(null);
+                          setEditedTitle("");
+                          setPreviousTitle("");
+                        }
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className={styles.conversationTitle} onClick={(e) => handleStartEditing(conversation, e)}>
+                      {conversation.is_useful && "⭐ "}
+                      {conversation.title}
+                    </div>
+                  )}
                   <button
                     className={styles.menuButton}
                     onClick={(e) => handleMenuClick(conversation, e)}
@@ -115,28 +279,31 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={handleModalClose}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <button className={styles.modalClose} onClick={handleModalClose}>
-              ×
+        <div
+          className={styles.modal}
+          style={{
+            position: "absolute",
+            top: modalPosition?.top ?? 0,
+            left: modalPosition?.left ?? 0,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className={styles.modalActions}>
+            <button className={styles.actionButton} onClick={() => handleModalAction("rename")}>
+              Rename
             </button>
-            <div className={styles.modalActions}>
-              <button className={styles.actionButton} onClick={() => handleModalAction("rename")}>
-                Rename
-              </button>
-              <button className={styles.actionButton} onClick={() => handleModalAction("useful")}>
-                Usefull
-              </button>
-              <button className={styles.actionButton} onClick={() => handleModalAction("share")}>
-                Share
-              </button>
-              <button
-                className={`${styles.actionButton} ${styles.deleteButton}`}
-                onClick={() => handleModalAction("delete")}
-              >
-                Delete
-              </button>
-            </div>
+            <button className={styles.actionButton} onClick={() => handleModalAction("useful")}>
+              {selectedConversation?.is_useful ? "Not useful" : "Useful"}
+            </button>
+            <button className={styles.actionButton} onClick={() => handleModalAction("share")}>
+              Share
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.deleteButton}`}
+              onClick={() => handleModalAction("delete")}
+            >
+              Delete
+            </button>
           </div>
         </div>
       )}

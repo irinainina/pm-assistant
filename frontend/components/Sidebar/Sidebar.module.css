@@ -70,21 +70,17 @@
   transition: background-color 0.2s;
 }
 
-.conversationItem:hover {
-  background: #e9ecef;
-}
-
+.conversationItem:hover,
+.conversationItem.hover,
 .conversationItem.active {
-  background: #8B8B8B;
-  color: white;
-}
-
-.conversationItem.active:hover {
-  background: #666;
+  background: #e9ecef;
 }
 
 .conversationTitle {
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .conversationContent {
@@ -106,7 +102,8 @@
   transition: opacity 0.2s ease;
 }
 
-.conversationItem:hover .menuButton {
+.conversationItem:hover .menuButton,
+.conversationItem.hover .menuButton {
   opacity: 1;
 }
 
@@ -116,54 +113,18 @@
 }
 
 /* Стили для модального окна */
-.modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
 .modal {
-  position: relative;
+  position: absolute;
+  z-index: 10;
   background: white;
   border-radius: 8px;
   padding: 0;
-  padding-top: 24px;
-  width: 200px;
+  width: 160px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.modalClose {
-  position: absolute;
-  top: 8px;
-  right: 16px;
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.modalClose:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-  color: #333;
-}
-
 .modalBody {
-  padding: 20px;
+  padding: 16px;
   border-bottom: 1px solid #e5e5e5;
 }
 
@@ -180,13 +141,14 @@
 }
 
 .actionButton {
-  padding: 10px 16px;
-  border: 1px solid #ddd;
+  padding: 6px 12px;
+  border: 0;
   background: white;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   transition: background-color 0.2s ease;
+  text-align: left;
 }
 
 .actionButton:hover {
@@ -200,4 +162,39 @@
 
 .deleteButton:hover {
   background-color: #ffebee;
+}
+
+.useful {
+  border-left: 3px solid #ffd700;
+}
+
+.renameInput {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.renameInput:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.modal h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.editableInput {
+  width: 100%;
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  outline: none;
+  direction: ltr;
+  text-align: left;
 }

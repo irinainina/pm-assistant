@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
 import psycopg2
 import os
-import json
+import uuid
+from datetime import datetime
 
 conversations_bp = Blueprint('conversations', __name__)
 
@@ -10,7 +11,8 @@ def get_db_connection():
 
 @conversations_bp.route('/conversations', methods=['GET'])
 def get_conversations():    
-    user_id = request.headers.get('User-Id')
+    # user_id = request.headers.get('User-Id')
+    user_id = request.headers.get('User-Id') or request.args.get('user_id')
 
     if not user_id:
         return jsonify({'error': 'User ID header is required'}), 400
@@ -100,3 +102,143 @@ def get_conversation_messages(conversation_id):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@conversations_bp.route('/conversations/<conversation_id>', methods=['PUT'])
+def update_conversation(conversation_id):
+    user_id = request.headers.get('User-Id')
+    
+    if not user_id:
+        return jsonify({'error': 'User ID header is required'}), 400
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM conversations WHERE id = %s AND user_id = %s", 
+                      (conversation_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Conversation not found or access denied'}), 404
+
+        update_fields = []
+        update_values = []
+        
+        if 'title' in data:
+            update_fields.append("title = %s")
+            update_values.append(data['title'])
+        
+        if 'is_useful' in data:
+            update_fields.append("is_useful = %s")
+            update_values.append(data['is_useful'])
+        
+        if update_fields:
+            update_fields.append("updated_at = %s")
+            update_values.append(datetime.now())
+            
+            update_values.append(conversation_id)
+            update_values.append(user_id)
+            
+            cursor.execute(f"""
+                UPDATE conversations 
+                SET {', '.join(update_fields)}
+                WHERE id = %s AND user_id = %s
+                RETURNING id, title, is_useful
+            """, update_values)
+            
+            result = cursor.fetchone()
+            conn.commit()
+            
+            cursor.close()
+            conn.close()
+            
+            return jsonify({
+                'id': result[0],
+                'title': result[1],
+                'is_useful': result[2]
+            })
+        else:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'No valid fields to update'}), 400
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@conversations_bp.route('/conversations/<conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    user_id = request.headers.get('User-Id')
+    
+    if not user_id:
+        return jsonify({'error': 'User ID header is required'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM conversations WHERE id = %s AND user_id = %s", 
+                      (conversation_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Conversation not found or access denied'}), 404
+
+        cursor.execute("DELETE FROM messages WHERE conversation_id = %s", (conversation_id,))
+        cursor.execute("DELETE FROM conversations WHERE id = %s AND user_id = %s", 
+                      (conversation_id, user_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@conversations_bp.route('/conversations', methods=['POST'])
+def create_conversation():
+    user_id = request.headers.get('User-Id')
+    
+    if not user_id:
+        return jsonify({'error': 'User ID header is required'}), 400
+    
+    try:
+        data = request.get_json()
+        title = data.get('title', 'New Conversation')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        conversation_id = str(uuid.uuid4())
+        
+        cursor.execute("""
+            INSERT INTO conversations (id, user_id, title, last_activity_at, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, title, is_useful, last_activity_at, created_at
+        """, (conversation_id, user_id, title, datetime.now(), datetime.now(), datetime.now()))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        
+        conversation = {
+            'id': result[0],
+            'title': result[1],
+            'is_useful': result[2],
+            'last_activity_at': result[3].isoformat(),
+            'created_at': result[4].isoformat(),
+            'message_count': 0
+        }
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify(conversation), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
