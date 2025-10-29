@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
+import QuickQuestions from "@/components/QuickQuestions/QuickQuestions";
 import styles from "./AgentSection.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -14,6 +15,12 @@ export default function AgentSection({ currentConversationId, onConversationChan
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDbActual, setIsDbActual] = useState(true);
+  const [showQuickQuestions, setShowQuickQuestions] = useState(false);
+
+  const handleSelectQuestion = (question) => {
+    setInput(question);
+    setShowQuickQuestions(false);
+  };
 
   const chatRef = useRef(null);
   const storageKey = "agent_history";
@@ -260,6 +267,15 @@ export default function AgentSection({ currentConversationId, onConversationChan
     <section className={styles.section}>
       <div className={styles.imageWrapper}>
         <button
+          className={`${styles.button} ${styles.quickQuestionsButton}`}
+          onClick={() => {
+            handleNewChat();
+            setShowQuickQuestions(true);
+          }}
+        >
+          Quick Questions
+        </button>
+        <button
           onClick={updateDatabase}
           className={`${styles.button} ${styles.updateButton} ${
             isUpdating ? styles.loading : !isDbActual ? styles.outdated : ""
@@ -358,6 +374,11 @@ export default function AgentSection({ currentConversationId, onConversationChan
           </button>
         </div>
       )}
+      <QuickQuestions
+        onSelectQuestion={handleSelectQuestion}
+        isOpen={showQuickQuestions}
+        onClose={() => setShowQuickQuestions(false)}
+      />
     </section>
   );
 }

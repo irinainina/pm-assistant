@@ -17,6 +17,7 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   const [editedTitle, setEditedTitle] = useState("");
   const [previousTitle, setPreviousTitle] = useState("");
   const [notification, setNotification] = useState({ isVisible: false, message: "" });
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined") {
@@ -55,11 +56,14 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   };
 
   const filteredConversations = conversations.filter((conversation) => {
-    if (activeTab === "useful") {
-      return conversation.is_useful;
-    }
-    return true;
+    const matchesSearch = conversation.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesTab = activeTab === "useful" ? conversation.is_useful : true;
+    return matchesSearch && matchesTab;
   });
+
+  const clearSearch = () => {
+    setSearchTerm("");
+  };
 
   const handleMenuClick = (conversation, event) => {
     event.stopPropagation();
@@ -251,6 +255,23 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
           )}
         </div>
 
+        <div className={styles.searchContainer}>
+          <div className={styles.searchWrapper}>
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={styles.searchInput}
+            />
+            {searchTerm && (
+              <button className={styles.clearButton} onClick={clearSearch} aria-label="Clear search">
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${activeTab === "all" ? styles.activeTab : ""}`}
@@ -269,7 +290,11 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
         <div className={styles.conversationList}>
           {filteredConversations.length === 0 ? (
             <div className={styles.empty}>
-              {activeTab === "useful" ? "No useful conversations yet" : "No conversations yet"}
+              {searchTerm
+                ? "No conversations found"
+                : activeTab === "useful"
+                ? "No useful conversations yet"
+                : "No conversations yet"}
             </div>
           ) : (
             filteredConversations.map((conversation) => (

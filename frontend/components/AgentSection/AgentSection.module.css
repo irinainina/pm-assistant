@@ -115,15 +115,15 @@
 }
 
 .button.active {
-  background-color: #8B8B8B;
+  background-color: #8b8b8b;
   pointer-events: auto;
 }
 
 .button.active:hover {
-  background-color: #666;  
+  background-color: #666;
 }
 
-.button:disabled {  
+.button:disabled {
   cursor: auto;
   opacity: 0.7;
 }
@@ -160,7 +160,9 @@
 }
 
 @keyframes blink {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     opacity: 0.3;
   }
   40% {
@@ -181,7 +183,6 @@
   margin-bottom: 32px;
   border-radius: 8px;
 }
-
 
 .agentContent h1 {
   font-size: 32px;
@@ -208,7 +209,7 @@
 .agentContent img {
   display: block;
   width: 100%;
-  max-width: 600px;  
+  max-width: 600px;
   height: auto;
   margin: 16px auto;
   border-radius: 16px;
@@ -239,7 +240,6 @@
   color: red;
 }
 
-
 .updateButton {
   position: absolute;
   right: 16px;
@@ -264,3 +264,14 @@
   background-color: #b91c1c !important;
 }
 
+.quickQuestionsButton {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  background: #6c757d;
+  color: white;  
+}
+
+.quickQuestionsButton:hover {
+  background: #545b62;
+}
