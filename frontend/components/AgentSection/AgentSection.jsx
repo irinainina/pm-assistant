@@ -7,7 +7,7 @@ import styles from "./AgentSection.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-export default function AgentSection({ currentConversationId, onConversationChange }) {
+export default function AgentSection({ currentConversationId, onConversationChange, isPublicMode = false }) {
   const { data: session } = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
@@ -28,14 +28,23 @@ export default function AgentSection({ currentConversationId, onConversationChan
   }, [currentConversationId]);
 
   const loadConversation = async (conversationId) => {
-    if (!session?.user?.id) return;
+    if (!conversationId) return;
 
     try {
-      const response = await fetch(`${apiUrl}/api/conversations/${conversationId}/messages`, {
-        headers: {
+      let url;
+      let options = {};
+
+      if (isPublicMode) {
+        url = `${apiUrl}/api/public/conversations/${conversationId}/messages`;
+      } else {
+        if (!session?.user?.id) return;
+        url = `${apiUrl}/api/conversations/${conversationId}/messages`;
+        options.headers = {
           "User-Id": session.user.id,
-        },
-      });
+        };
+      }
+
+      const response = await fetch(url, options);
 
       if (response.ok) {
         const data = await response.json();
@@ -63,6 +72,8 @@ export default function AgentSection({ currentConversationId, onConversationChan
       console.error("Error loading conversation:", error);
     }
   };
+
+  const showInput = !isPublicMode || (isPublicMode && session);
 
   const saveHistory = (newMessages) => {
     setMessages(newMessages);
@@ -320,31 +331,33 @@ export default function AgentSection({ currentConversationId, onConversationChan
         </div>
       </div>
 
-      <div className={styles.inputArea}>
-        <input
-          type="text"
-          value={input}
-          placeholder="Type your question..."
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className={styles.input}
-          disabled={isLoading}
-        />
-        <button
-          onClick={sendMessage}
-          className={`${styles.button} ${isLoading ? styles.loading : ""}`}
-          disabled={!input.trim() || isLoading}
-        >
-          {isLoading ? "Sending" : "Send"}
-          {isLoading && (
-            <span className={styles.dots}>
-              <span className={styles.dot}></span>
-              <span className={styles.dot}></span>
-              <span className={styles.dot}></span>
-            </span>
-          )}
-        </button>
-      </div>
+      {showInput && (
+        <div className={styles.inputArea}>
+          <input
+            type="text"
+            value={input}
+            placeholder="Type your question..."
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className={styles.input}
+            disabled={isLoading}
+          />
+          <button
+            onClick={sendMessage}
+            className={`${styles.button} ${isLoading ? styles.loading : ""}`}
+            disabled={!input.trim() || isLoading}
+          >
+            {isLoading ? "Sending" : "Send"}
+            {isLoading && (
+              <span className={styles.dots}>
+                <span className={styles.dot}></span>
+                <span className={styles.dot}></span>
+                <span className={styles.dot}></span>
+              </span>
+            )}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

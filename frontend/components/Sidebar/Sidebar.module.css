@@ -198,3 +198,39 @@
   direction: ltr;
   text-align: left;
 }
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #e9ecef;
+  background: white;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #6c757d;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.activeTab {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: #f8f9fa;
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}

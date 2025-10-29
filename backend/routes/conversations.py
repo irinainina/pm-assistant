@@ -11,8 +11,8 @@ def get_db_connection():
 
 @conversations_bp.route('/conversations', methods=['GET'])
 def get_conversations():    
-    # user_id = request.headers.get('User-Id')
-    user_id = request.headers.get('User-Id') or request.args.get('user_id')
+    user_id = request.headers.get('User-Id')
+    # user_id = request.headers.get('User-Id') or request.args.get('user_id')
 
     if not user_id:
         return jsonify({'error': 'User ID header is required'}), 400
@@ -238,6 +238,46 @@ def create_conversation():
         conn.close()
         
         return jsonify(conversation), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@conversations_bp.route('/public/conversations/<conversation_id>/messages', methods=['GET'])
+def get_public_conversation_messages(conversation_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM conversations WHERE id = %s", (conversation_id,))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        cursor.execute("""
+            SELECT id, role, content, sources, created_at 
+            FROM messages 
+            WHERE conversation_id = %s 
+            ORDER BY created_at ASC
+        """, (conversation_id,))
+        
+        messages = []
+        for row in cursor.fetchall():
+            messages.append({
+                'id': row[0],
+                'role': row[1],
+                'content': row[2],
+                'sources': row[3],
+                'created_at': row[4].isoformat()
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'conversation_id': conversation_id,
+            'messages': messages
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

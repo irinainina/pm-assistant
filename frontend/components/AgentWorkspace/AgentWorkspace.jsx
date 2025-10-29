@@ -6,10 +6,16 @@ import Sidebar from "@/components/Sidebar/Sidebar";
 import AgentSection from "@/components/AgentSection/AgentSection";
 import styles from "./AgentWorkspace.module.css";
 
-export default function AgentWorkspace() {
+export default function AgentWorkspace({ initialConversationId, isPublicMode = false }) {
   const { data: session } = useSession();
-  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [currentConversationId, setCurrentConversationId] = useState(initialConversationId || null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    if (initialConversationId) {
+      setCurrentConversationId(initialConversationId);
+    }
+  }, [initialConversationId]);
 
   useEffect(() => {
     const savedSidebarState = localStorage.getItem("sidebarOpen");
@@ -21,7 +27,6 @@ export default function AgentWorkspace() {
   useEffect(() => {
     localStorage.setItem("sidebarOpen", JSON.stringify(isSidebarOpen));
   }, [isSidebarOpen]);
-
 
   const handleSelectConversation = (conversationId) => {
     setCurrentConversationId(conversationId);
@@ -48,7 +53,11 @@ export default function AgentWorkspace() {
             ☰
           </button>
         )}
-        <AgentSection currentConversationId={currentConversationId} onConversationChange={handleSelectConversation} />
+        <AgentSection
+          currentConversationId={currentConversationId}
+          onConversationChange={handleSelectConversation}
+          isPublicMode={isPublicMode}
+        />
       </div>
     </div>
   );

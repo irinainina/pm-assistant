@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import Notification from "@/components/Notification/Notification";
 import styles from "./Sidebar.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -15,7 +16,21 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   const [editingId, setEditingId] = useState(null);
   const [editedTitle, setEditedTitle] = useState("");
   const [previousTitle, setPreviousTitle] = useState("");
+  const [notification, setNotification] = useState({ isVisible: false, message: "" });
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      const savedTab = localStorage.getItem("conversations-active-tab");
+      return savedTab && (savedTab === "all" || savedTab === "useful") ? savedTab : "all";
+    }
+    return "all";
+  });
+
   const editableRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem("conversations-active-tab", activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -39,6 +54,13 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
     }
   };
 
+  const filteredConversations = conversations.filter((conversation) => {
+    if (activeTab === "useful") {
+      return conversation.is_useful;
+    }
+    return true;
+  });
+
   const handleMenuClick = (conversation, event) => {
     event.stopPropagation();
     if (modalOpen && selectedConversation?.id === conversation.id) {
@@ -59,11 +81,11 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
     setSelectedConversation(null);
   };
 
-  const handleStartEditing = (conversation, e) => {
-    e.stopPropagation();
-    setEditingId(conversation.id);
-    setEditedTitle(conversation.title);
-    setPreviousTitle(conversation.title);
+  const handleStartEditing = () => {
+    if (!selectedConversation) return;
+    setEditingId(selectedConversation.id);
+    setEditedTitle(selectedConversation.title);
+    setPreviousTitle(selectedConversation.title);
     setModalOpen(false);
   };
 
@@ -96,7 +118,6 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
         console.error("Error renaming conversation:", error);
       }
     } else {
-      // если пусто или без изменений — возвращаем старое
       setConversations((prev) =>
         prev.map((conv) => (conv.id === editingId ? { ...conv, title: previousTitle } : conv))
       );
@@ -157,18 +178,26 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
 
   const handleShare = () => {
     if (!selectedConversation) return;
-    const shareUrl = `${window.location.origin}/chat/${selectedConversation.id}`;
+    const shareUrl = `${window.location.origin}/${selectedConversation.id}`;
     navigator.clipboard
       .writeText(shareUrl)
-      .then(() => alert("Conversation link copied to clipboard!"))
-      .catch(() => alert(`Share this link: ${shareUrl}`));
+      .then(() => {
+        setNotification({ isVisible: true, message: "Conversation link copied to clipboard!" });
+      })
+      .catch(() => {
+        setNotification({ isVisible: true, message: `Share this link: ${shareUrl}` });
+      });
     handleModalClose();
+  };
+
+  const closeNotification = () => {
+    setNotification({ isVisible: false, message: "" });
   };
 
   const handleModalAction = (action) => {
     switch (action) {
       case "rename":
-        handleStartEditing(selectedConversation, new Event("click"));
+        handleStartEditing();
         break;
       case "useful":
         handleToggleUseful();
@@ -222,11 +251,28 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
           )}
         </div>
 
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === "all" ? styles.activeTab : ""}`}
+            onClick={() => setActiveTab("all")}
+          >
+            All ({conversations.length})
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === "useful" ? styles.activeTab : ""}`}
+            onClick={() => setActiveTab("useful")}
+          >
+            Useful ({conversations.filter((c) => c.is_useful).length})
+          </button>
+        </div>
+
         <div className={styles.conversationList}>
-          {conversations.length === 0 ? (
-            <div className={styles.empty}>No conversations yet</div>
+          {filteredConversations.length === 0 ? (
+            <div className={styles.empty}>
+              {activeTab === "useful" ? "No useful conversations yet" : "No conversations yet"}
+            </div>
           ) : (
-            conversations.map((conversation) => (
+            filteredConversations.map((conversation) => (
               <div
                 key={conversation.id}
                 className={`${styles.conversationItem} 
@@ -259,7 +305,7 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <div className={styles.conversationTitle} onClick={(e) => handleStartEditing(conversation, e)}>
+                    <div className={styles.conversationTitle}>
                       {conversation.is_useful && "⭐ "}
                       {conversation.title}
                     </div>
@@ -307,6 +353,7 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
           </div>
         </div>
       )}
+      <Notification message={notification.message} isVisible={notification.isVisible} onClose={closeNotification} />
     </>
   );
 }

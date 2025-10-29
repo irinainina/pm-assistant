@@ -11,6 +11,7 @@ export default function Auth() {
     <div className={styles.container}>
       {!session ? (
         <>
+          <div className={styles.user}></div>
           <button className={styles.button} onClick={() => signIn("google")}>
             Sign in
           </button>
