@@ -219,7 +219,9 @@ export default function AgentSection({ currentConversationId, onConversationChan
 
                 saveHistory([...updatedMessages, finalMessage]);
                 if (onNewConversation) {
-                  onNewConversation();
+                  setTimeout(() => {
+                    onNewConversation();
+                  }, 500);
                 }
                 setIsLoading(false);
                 return;

@@ -41,7 +41,9 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
 
   useEffect(() => {
     if (onNewConversation) {
-      loadConversations();
+      setTimeout(() => {
+        loadConversations();
+      }, 1000);
     }
   }, [onNewConversation]);
 
@@ -54,7 +56,8 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
       });
       if (response.ok) {
         const data = await response.json();
-        setConversations(data);
+        const sortedConversations = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setConversations(sortedConversations);
       }
     } catch (error) {
       console.error("Error loading conversations:", error);
