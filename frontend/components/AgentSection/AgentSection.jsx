@@ -218,7 +218,7 @@ export default function AgentSection({ currentConversationId, onConversationChan
                 };
 
                 saveHistory([...updatedMessages, finalMessage]);
-                if (!currentConversationId && onNewConversation) {
+                if (onNewConversation) {
                   onNewConversation();
                 }
                 setIsLoading(false);

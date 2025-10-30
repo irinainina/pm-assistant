@@ -10,7 +10,7 @@ export default function AgentWorkspace({ initialConversationId, isPublicMode = f
   const { data: session } = useSession();
   const [currentConversationId, setCurrentConversationId] = useState(initialConversationId || null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [conversations, setConversations] = useState([]);
+  const [newConversationFlag, setNewConversationFlag] = useState(false);
 
   useEffect(() => {
     if (initialConversationId) {
@@ -29,23 +29,6 @@ export default function AgentWorkspace({ initialConversationId, isPublicMode = f
     localStorage.setItem("sidebarOpen", JSON.stringify(isSidebarOpen));
   }, [isSidebarOpen]);
 
-  const loadConversations = async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${apiUrl}/api/conversations`, {
-        headers: { "User-Id": session.user.id },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data);
-      }
-    } catch (error) {
-      console.error("Error loading conversations:", error);
-    }
-  };
-
   const handleSelectConversation = (conversationId) => {
     setCurrentConversationId(conversationId);
   };
@@ -54,16 +37,19 @@ export default function AgentWorkspace({ initialConversationId, isPublicMode = f
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  const handleNewConversation = () => {
+    setNewConversationFlag((prev) => !prev);
+  };
+
   return (
     <div className={styles.container}>
       {session && (
         <Sidebar
-          conversations={conversations}
           onSelectConversation={handleSelectConversation}
           currentConversationId={currentConversationId}
           isOpen={isSidebarOpen}
           onClose={toggleSidebar}
-          onConversationsUpdate={loadConversations}
+          onNewConversation={newConversationFlag}
         />
       )}
 
@@ -77,7 +63,7 @@ export default function AgentWorkspace({ initialConversationId, isPublicMode = f
           currentConversationId={currentConversationId}
           onConversationChange={handleSelectConversation}
           isPublicMode={isPublicMode}
-          onNewConversation={loadConversations}
+          onNewConversation={handleNewConversation}
         />
       </div>
     </div>

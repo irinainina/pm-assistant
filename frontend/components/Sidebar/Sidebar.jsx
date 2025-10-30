@@ -7,15 +7,9 @@ import styles from "./Sidebar.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export default function Sidebar({
-  conversations,
-  onSelectConversation,
-  currentConversationId,
-  isOpen,
-  onClose,
-  onConversationsUpdate,
-}) {
+export default function Sidebar({ onSelectConversation, currentConversationId, isOpen, onClose, onNewConversation }) {
   const { data: session } = useSession();
+  const [conversations, setConversations] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [modalPosition, setModalPosition] = useState(null);
@@ -40,10 +34,32 @@ export default function Sidebar({
   }, [activeTab]);
 
   useEffect(() => {
-    if (session?.user?.id && onConversationsUpdate) {
-      onConversationsUpdate();
+    if (session?.user?.id) {
+      loadConversations();
     }
-  }, [session, onConversationsUpdate]);
+  }, [session]);
+
+  useEffect(() => {
+    if (onNewConversation) {
+      loadConversations();
+    }
+  }, [onNewConversation]);
+
+  const loadConversations = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/conversations`, {
+        headers: { "User-Id": session.user.id },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data);
+      }
+    } catch (error) {
+      console.error("Error loading conversations:", error);
+    }
+  };
 
   const filteredConversations = conversations.filter((conversation) => {
     const matchesSearch = conversation.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -99,25 +115,27 @@ export default function Sidebar({
         });
 
         if (response.ok) {
-          if (onConversationsUpdate) {
-            onConversationsUpdate();
-          }
+          const updated = await response.json();
+          setConversations((prev) =>
+            prev.map((conv) => (conv.id === updated.id ? { ...conv, title: updated.title } : conv))
+          );
         } else {
-          setEditingId(null);
-          setEditedTitle("");
-          setPreviousTitle("");
+          setConversations((prev) =>
+            prev.map((conv) => (conv.id === editingId ? { ...conv, title: previousTitle } : conv))
+          );
         }
       } catch (error) {
         console.error("Error renaming conversation:", error);
-        setEditingId(null);
-        setEditedTitle("");
-        setPreviousTitle("");
       }
     } else {
-      setEditingId(null);
-      setEditedTitle("");
-      setPreviousTitle("");
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === editingId ? { ...conv, title: previousTitle } : conv))
+      );
     }
+
+    setEditingId(null);
+    setEditedTitle("");
+    setPreviousTitle("");
   };
 
   const handleToggleUseful = async () => {
@@ -134,9 +152,10 @@ export default function Sidebar({
       });
 
       if (response.ok) {
-        if (onConversationsUpdate) {
-          onConversationsUpdate();
-        }
+        const updated = await response.json();
+        setConversations((prev) =>
+          prev.map((conv) => (conv.id === updated.id ? { ...conv, is_useful: updated.is_useful } : conv))
+        );
         handleModalClose();
       }
     } catch (error) {
@@ -156,9 +175,7 @@ export default function Sidebar({
       });
 
       if (response.ok) {
-        if (onConversationsUpdate) {
-          onConversationsUpdate();
-        }
+        setConversations((prev) => prev.filter((c) => c.id !== selectedConversation.id));
         if (currentConversationId === selectedConversation.id) {
           onSelectConversation(null);
         }
