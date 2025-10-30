@@ -8,7 +8,7 @@ import styles from "./AgentSection.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-export default function AgentSection({ currentConversationId, onConversationChange, isPublicMode = false }) {
+export default function AgentSection({ currentConversationId, onConversationChange, isPublicMode = false, onNewConversation }) {
   const { data: session } = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
@@ -218,6 +218,9 @@ export default function AgentSection({ currentConversationId, onConversationChan
                 };
 
                 saveHistory([...updatedMessages, finalMessage]);
+                if (!currentConversationId && onNewConversation) {
+                  onNewConversation();
+                }
                 setIsLoading(false);
                 return;
               }
