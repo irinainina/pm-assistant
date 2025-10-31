@@ -9,7 +9,15 @@ from routes.conversations import conversations_bp
 import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+     origins=[
+         "https://pm-assistant.vercel.app",
+         "http://localhost:3000",
+         "http://127.0.0.1:3000"
+     ],
+     supports_credentials=True,
+     allow_headers=["*"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 chroma_client = ChromaClient()
 ai_engine = AIEngine()
