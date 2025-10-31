@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Notification from "@/components/Notification/Notification";
+import DeleteConfirmationModal from "@/components/DeleteConfirmationModal/DeleteConfirmationModal";
 import styles from "./Sidebar.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -18,6 +19,7 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   const [previousTitle, setPreviousTitle] = useState("");
   const [notification, setNotification] = useState({ isVisible: false, message: "" });
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined") {
@@ -169,8 +171,6 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
   const handleDelete = async () => {
     if (!selectedConversation) return;
 
-    if (!confirm("Are you sure you want to delete this conversation?")) return;
-
     try {
       const response = await fetch(`${apiUrl}/api/conversations/${selectedConversation.id}`, {
         method: "DELETE",
@@ -183,6 +183,7 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
           onSelectConversation(null);
         }
         handleModalClose();
+        setDeleteModalOpen(false);
       }
     } catch (error) {
       console.error("Error deleting conversation:", error);
@@ -219,7 +220,8 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
         handleShare();
         break;
       case "delete":
-        handleDelete();
+        setModalOpen(false);
+        setDeleteModalOpen(true);
         break;
       default:
         break;
@@ -387,6 +389,14 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
           </div>
         </div>
       )}
+
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        chatTitle={selectedConversation?.title}
+      />
+
       <Notification message={notification.message} isVisible={notification.isVisible} onClose={closeNotification} />
     </>
   );
