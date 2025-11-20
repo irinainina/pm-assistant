@@ -1,13 +1,9 @@
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --title: #111827;
+  --text: #4b5563;
+  --main: #10b981;
+  --main-hover: #059669;
 }
 
 html,

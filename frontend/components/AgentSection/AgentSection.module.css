@@ -1,5 +1,5 @@
 .section {
-  background-color: #ffffff;
+  background-color: var(--background);
   border-radius: 24px;
   padding: 40px;
   margin-bottom: 40px;
@@ -19,14 +19,14 @@
   font-size: 36px;
   font-weight: 700;
   margin-bottom: 16px;
-  color: #111827;
+  color: var(--text);
 }
 
 .description {
   font-size: 18px;
   line-height: 1.6;
-  color: #4b5563;
-  margin-bottom: 2rem;
+  color: var(--text);
+  margin-bottom: 32px;
 }
 
 .chat {
@@ -244,11 +244,11 @@
   position: absolute;
   right: 16px;
   top: 16px;
-  background-color: #10b981 !important;
+  background-color: var(--main) !important;
 }
 
 .updateButton:hover:not(:disabled) {
-  background-color: #059669 !important;
+  background-color: (--main-hover) !important;
 }
 
 .updateButton:disabled {

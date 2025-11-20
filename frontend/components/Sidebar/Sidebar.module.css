@@ -8,6 +8,13 @@
   border: 1px solid #e5e7eb;  
 }
 
+@media (max-width: 1440px) {
+  .sidebar {    
+    position: absolute;
+    z-index: 2;
+  }
+}
+
 .sidebar.closed {
   display: none;
 }
