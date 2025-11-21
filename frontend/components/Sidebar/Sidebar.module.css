@@ -1,11 +1,12 @@
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;  
   flex: 1;
   width: 300px;
-  background: #f8f9fa;
+  background: var(--sidebar-bg);
   border-radius: 24px;
-  border: 1px solid #e5e7eb;  
+  border: 1px solid var(--border);  
 }
 
 @media (max-width: 1440px) {
@@ -26,14 +27,16 @@
 .header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border);
 }
 
 .header h3 {
   margin: 0;
-  font-size: 1.1rem;
-  color: #333;
+  padding: 0;
+  font-size: 18px;
+  color: var(--title);
 }
 
 .closeButton {
@@ -41,7 +44,7 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: #666;
+  color: var(--text);
   padding: 0;
   width: 32px;
   height: 32px;
@@ -54,7 +57,7 @@
 
 .closeButton:hover {
   background-color: rgba(0, 0, 0, 0.1);
-  color: #333;
+  color: var(--title);
 }
 
 .conversationList {
@@ -119,7 +122,6 @@
   color: #333;
 }
 
-/* Стили для модального окна */
 .modal {
   position: absolute;
   z-index: 10;
@@ -186,12 +188,12 @@
 
 .renameInput:focus {
   outline: none;
-  border-color: #007bff;
+  border-color: var(--main-hover);
 }
 
 .modal h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--title);
 }
 
 .editableInput {
@@ -230,8 +232,8 @@
 }
 
 .activeTab {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--main);
+  border-bottom-color: var(--main);
   background: #f8f9fa;
 }
 
@@ -258,7 +260,7 @@
 }
 
 .searchInput:focus {
-  border-color: #007bff;
+  border-color: var(--main-hover);
 }
 
 .emptySearch {
@@ -288,10 +290,6 @@
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
-}
-
-.searchInput:focus {
-  border-color: #007bff;
 }
 
 .clearButton {

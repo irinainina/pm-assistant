@@ -78,17 +78,21 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
 
   const handleMenuClick = (conversation, event) => {
     event.stopPropagation();
-    if (modalOpen && selectedConversation?.id === conversation.id) {
-      handleModalClose();
-      return;
+
+    if (selectedConversation?.id === conversation.id) {
+      setModalOpen((prev) => !prev);
+    } else {
+      setSelectedConversation(conversation);
+      setModalOpen(true);
     }
-    setSelectedConversation(conversation);
+
+    const sidebarRect = event.currentTarget.closest(`.${styles.sidebar}`).getBoundingClientRect();
     const rect = event.currentTarget.getBoundingClientRect();
+
     setModalPosition({
-      top: rect.top - 56,
-      left: rect.right - 80,
+      top: rect.bottom - sidebarRect.top + 12,
+      left: rect.right - sidebarRect.left - 80,
     });
-    setModalOpen(true);
   };
 
   const handleModalClose = () => {
@@ -233,7 +237,12 @@ export default function Sidebar({ onSelectConversation, currentConversationId, i
 
     const handleClickOutside = (e) => {
       const modal = document.querySelector(`.${styles.modal}`);
-      if (modal && !modal.contains(e.target)) handleModalClose();
+      const menuButtons = document.querySelectorAll(`.${styles.menuButton}`);
+      const clickedMenuButton = Array.from(menuButtons).some((button) => button.contains(e.target));
+
+      if (modal && !modal.contains(e.target) && !clickedMenuButton) {
+        handleModalClose();
+      }
     };
 
     document.addEventListener("click", handleClickOutside);

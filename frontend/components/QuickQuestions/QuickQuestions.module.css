@@ -85,13 +85,13 @@
 
 .categoryButton:hover {
   background: #f8f9fa;
-  border-color: #007bff;
+  border-color: var(--main-hover);
 }
 
 .categoryButton.active {
-  background: #007bff;
+  background: var(--main);
   color: white;
-  border-color: #007bff;
+  border-color: var(--main);
 }
 
 .questions {
@@ -117,7 +117,5 @@
 
 .questionButton:hover {
   background: #f8f9fa;
-  border-color: #28a745;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--main-hover);
 }
